@@ -1562,6 +1562,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // falling through here too, on the rare chance diedAtZeroHp does fire for it, would double
         // up the kill.
         if ("Corrupted Hunllef".equals(name) || "Crystalline Hunllef".equals(name)) return;
+        // The Hueycoatl is handled exclusively by onLootReceived's synthesized kill (see
+        // HUEYCOATL_NPC_NAME javadoc below) - its main body shares the name "The Hueycoatl" across
+        // all combat forms (normal/shielded/defeated) and, per production kill data (21 real kills
+        // in one session logged only 1 despawn here), essentially never reads health ratio 0 at
+        // true death - the same "non-standard health bar" gap as the Hunllef (see this method's
+        // javadoc). Meanwhile its tail genuinely despawns at 0hp once per attempt when broken to
+        // lift the shield, which isn't a kill at all - letting it fall through here would
+        // misreport every attempt's mid-fight tail break as a loot-less kill.
+        if (HUEYCOATL_NPC_NAME.equals(name) || name.startsWith("Hueycoatl tail")) return;
 
         WorldPoint wp = npc.getWorldLocation();
         if (wp == null) return;
@@ -1604,6 +1613,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 items.add(entry);
             }
             claimPendingGauntletKill(event.getName());
+            claimHueycoatlKill(event.getName());
             dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
         } else if (event.getType() == LootRecordType.EVENT) {
             String clueTier = ClueTier.extractTier(event.getName());
@@ -1684,6 +1694,19 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private Integer pendingGauntletKc;
     private long pendingGauntletDetectedAtMillis;
 
+    /** Shared across all of the Hueycoatl's main-body combat forms (normal/shielded/defeated) -
+     * see {@link #onNpcDespawned}'s javadoc for why its kill can't be detected there. */
+    private static final String HUEYCOATL_NPC_NAME = "The Hueycoatl";
+    /** The "Defeated" composition id, used only as the kill event's recorded npcId - detection
+     * itself doesn't depend on it. */
+    private static final int HUEYCOATL_NPC_ID = 14012;
+    /** A real kill is at least ~20s apart (fastest recorded full-team kill); Hueycoatl's unique +
+     * tertiary loot rolls (see runelite/runelite#19813) fire as separate same-tick LootReceived
+     * calls for one kill. Any "The Hueycoatl" loot arriving within this window of the last
+     * synthesized kill is treated as another roll from that same kill, not a new one. */
+    private static final long HUEYCOATL_KILL_DEBOUNCE_MILLIS = 5000L;
+    private long lastHueycoatlKillMillis = 0;
+
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) return;
@@ -1753,6 +1776,28 @@ public class GroupScapeTrackerPlugin extends Plugin {
         pendingGauntletNpcName = null;
         pendingGauntletKc = null;
         return true;
+    }
+
+    /**
+     * Synthesizes a Hueycoatl kill the moment its loot arrives, since despawn detection can't
+     * catch it (see {@link #onNpcDespawned}'s javadoc) - a no-op unless {@code npcName} is
+     * {@link #HUEYCOATL_NPC_NAME}. Debounced against {@link #HUEYCOATL_KILL_DEBOUNCE_MILLIS} so
+     * a kill's second/third loot roll (unique + tertiary tables can both fire) doesn't get
+     * mistaken for a new kill; the caller's own {@code onLoot} call right after this one attaches
+     * every roll to whichever kill (this one, or one already pending) it belongs to.
+     */
+    private void claimHueycoatlKill(String npcName) {
+        if (!HUEYCOATL_NPC_NAME.equals(npcName)) return;
+        long now = System.currentTimeMillis();
+        if (now - lastHueycoatlKillMillis < HUEYCOATL_KILL_DEBOUNCE_MILLIS) return;
+        lastHueycoatlKillMillis = now;
+
+        Player local = client.getLocalPlayer();
+        WorldPoint wp = local == null ? null : local.getWorldLocation();
+        if (local == null || local.getName() == null || wp == null) return;
+
+        dataManager.getKillLootDeathEvents().onKill(
+                local.getName(), HUEYCOATL_NPC_ID, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
     }
 
     /**

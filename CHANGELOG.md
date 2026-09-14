@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.28] - 2026-09-14
+
+### Fixed
+- Hueycoatl kills were badly undercounted in the site's Loot Log - most kills were only being detected as the boss's tail breaking mid-fight (no loot), while the actual kill went unlogged. Kills are now detected correctly and their loot attached.
+
 ## [1.8.27] - 2026-09-12
 
 ### Fixed
