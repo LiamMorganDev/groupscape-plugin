@@ -6,6 +6,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - A boss Slayer task (Duke Sucellus, Barrows Brothers, and similar) could get permanently stuck showing as "Unknown task" in the group panel/side panel instead of at least "Boss" - a follow-up to the earlier fix for the same symptom, covering a case that fix missed.
+- Cancelling a task after only a few kills could show up in the site's History tab as "Completed" at the full kill count instead of "Cancelled", hiding the point cost - the same timing gap between the game clearing your task and resetting its kill counter as the recent block-related fix, just untriggered for cancelling.
 
 ## [1.8.29] - 2026-09-16
 

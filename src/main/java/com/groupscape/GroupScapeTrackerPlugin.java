@@ -882,13 +882,20 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * before turning it in/getting reassigned (a common "grind it out, then block it" sequence),
      * and that's still this task's own outcome, not an unrelated purchase - so a completed task
      * whose points delta exactly matches its own closing master's block price is relabeled
-     * "blocked" instead. Anything else at 0 remaining forces "completed" with no points delta,
-     * because a kill-count task auto-completes the instant its counter hits 0 with no other window
-     * to act on it, so any *other* points movement measured across its lifetime is necessarily an
-     * unrelated reward-shop purchase (most commonly blocking a *different*, newly-assigned task);
-     * misreading that as this task being blocked/cancelled was exactly the bug that mislabeled a
-     * fully-killed Turoth task as "blocked -120" when the points actually came from blocking an
-     * unrelated task. Otherwise (task did NOT complete): cancelled (delta == -30) vs. blocked
+     * "blocked" instead. The same applies to a delta of exactly {@code -SLAYER_CANCEL_COST}: the
+     * {@code SLAYER_TARGET}/{@code SLAYER_COUNT} varp writes for an in-game cancel aren't
+     * guaranteed to land in the same tick either (only the Rewards Shop's block-confirm click has
+     * a hook to snapshot around that race, see {@link #suppressNextSlayerTaskSnapshotRefresh}), so
+     * {@code closingSnapshot.amountRemaining} can read a corrupted 0 for a task cancelled after
+     * only a few kills - that read back as "completed" at full kills despite the real -30 point
+     * cost sitting right there in the delta, and is relabeled "cancelled" instead. Anything else at
+     * 0 remaining forces "completed" with no points delta, because a kill-count task auto-completes
+     * the instant its counter hits 0 with no other window to act on it, so any *other* points
+     * movement measured across its lifetime is necessarily an unrelated reward-shop purchase (most
+     * commonly blocking a *different*, newly-assigned task); misreading that as this task being
+     * blocked/cancelled was exactly the bug that mislabeled a fully-killed Turoth task as "blocked
+     * -120" when the points actually came from blocking an unrelated task. Otherwise (task did NOT
+     * complete): cancelled (delta == -30) vs. blocked
      * (delta matches that master's known block price) vs. reset (delta == 0 and either the closing
      * task's own master, or whichever master {@code afterClose} shows a new task from, is one of
      * {@link #SLAYER_RESET_MASTERS} - a free Turael/Aya/Spria skip is granted by talking to one of
@@ -918,6 +925,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (closingSnapshot.amountRemaining <= 0) {
             if (blockPrice != null && pointsDelta == -blockPrice) {
                 status = "blocked";
+            } else if (pointsDelta == -SLAYER_CANCEL_COST) {
+                status = "cancelled";
             } else {
                 status = "completed";
                 pointsDelta = 0;
