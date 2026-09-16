@@ -174,17 +174,24 @@ public class SlayerTaskState implements ConsumableState {
     private static final int BOSS_TASK_ID = 98;
 
     private static String resolveTaskName(Client client, int taskId) {
-        if (taskId == BOSS_TASK_ID) {
+        boolean isBossTask = taskId == BOSS_TASK_ID;
+        if (isBossTask) {
             Integer bossTaskId = resolveBossTaskId(client);
             if (bossTaskId == null) return "Boss";
             taskId = bossTaskId;
         }
 
         List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerTask.ID, DBTableID.SlayerTask.COL_ID, 0, taskId);
-        if (rows.isEmpty()) return null;
+        // A boss-task's SLAYER_TARGET_BOSSID can resolve to a SlayerTaskSublist row whose COL_TASK
+        // id doesn't (yet, or ever, for this client/game state) have a matching SlayerTask row -
+        // seen in practice for Duke Sucellus and Barrows Brothers assignments that never recovered.
+        // Same "never leave a hasTask=true boss assignment permanently nameless" fallback as the
+        // bossTaskId-not-found case above, rather than surfacing as "Unknown task" forever.
+        if (rows.isEmpty()) return isBossTask ? "Boss" : null;
 
         Object[] fields = client.getDBTableField(rows.get(0), DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0);
-        return fields.length > 0 ? (String) fields[0] : null;
+        if (fields.length > 0) return (String) fields[0];
+        return isBossTask ? "Boss" : null;
     }
 
     /**

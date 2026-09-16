@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.30] - 2026-09-17
+
+### Fixed
+- A boss Slayer task (Duke Sucellus, Barrows Brothers, and similar) could get permanently stuck showing as "Unknown task" in the group panel/side panel instead of at least "Boss" - a follow-up to the earlier fix for the same symptom, covering a case that fix missed.
+
 ## [1.8.29] - 2026-09-16
 
 ### Fixed
