@@ -2,6 +2,12 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.29] - 2026-09-16
+
+### Fixed
+- A task finished down to its kill limit and then blocked before being turned in was showing up as "Completed" in the site's History tab instead of "Blocked", with the block fee hidden.
+- Blocking your current task could occasionally leave the site's History tab showing it as "Completed" with a fake max kill count, even after only a few kills - a timing gap between the game clearing your task and resetting its kill counter could let a stale reading slip through right before the block was recorded.
+
 ## [1.8.28] - 2026-09-14
 
 ### Fixed

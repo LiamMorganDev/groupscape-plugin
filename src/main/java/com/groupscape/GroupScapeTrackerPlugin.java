@@ -203,6 +203,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * stuck "in progress" at 0 kills despite being finished in-game - a lost close event is the
      * only way that row was ever written that way). */
     private ClosingTaskSnapshot currentSlayerTaskLastSnapshot;
+    /** Set by {@link #handleSlayerRewardShopConfirm} right after a block purchase is confirmed,
+     * consumed by the very next {@link #handleSlayerTaskTransition} call that would otherwise
+     * refresh {@link #currentSlayerTaskLastSnapshot}. Blocking your current task un-assigns it, but
+     * the resulting {@code SLAYER_TARGET}/{@code SLAYER_COUNT} varp writes aren't guaranteed to
+     * land in the same client tick - if {@code SLAYER_COUNT} resets ahead of {@code SLAYER_TARGET}
+     * clearing, the intervening push would otherwise overwrite the snapshot with a bogus
+     * amountRemaining of 0 (still the same, not-yet-cleared taskId) moments before the real close,
+     * making a task blocked after only a few kills read back as "completed" at max kills once
+     * {@link #closeSlayerTask} runs. Skipping just the one push this flags lets the transition/close
+     * that follows fall back to the last snapshot from *before* the block purchase instead. */
+    private boolean suppressNextSlayerTaskSnapshotRefresh = false;
     /** Guards {@link #restorePendingSlayerTaskCloseIfNeeded} to run at most once per plugin
      * session - it only has anything to do the first time a slayer-task push happens after
      * startup, since after that {@link #currentSlayerTaskEventId} is the source of truth again. */
@@ -849,7 +860,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
                     playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount(),
                     next.modifierType(), next.modifierValue(), next.modifierNegative());
         } else if (hasTaskNow && currentSlayerTaskEventId != null && next.taskId() == currentSlayerTaskId) {
-            currentSlayerTaskLastSnapshot = ClosingTaskSnapshot.from(next);
+            if (suppressNextSlayerTaskSnapshotRefresh) {
+                suppressNextSlayerTaskSnapshotRefresh = false;
+            } else {
+                currentSlayerTaskLastSnapshot = ClosingTaskSnapshot.from(next);
+            }
         }
 
         persistPendingSlayerTaskClose(playerName);
@@ -862,17 +877,20 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * whatever it now represents - no task, or a freshly-assigned one) supplies the slayer points
      * reading *after* whatever this closure cost/paid, so the delta against
      * {@link #currentSlayerTaskPointsAtAssignment} classifies the close. Completed (the kill count
-     * already reached 0 remaining) is checked *first* and wins outright: a kill-count task
-     * auto-completes the instant its counter hits 0, with no window to block/cancel it afterwards,
-     * so any points movement measured across a completed task's lifetime is necessarily an
-     * unrelated reward-shop purchase (most commonly blocking a *different*, still-current task's
-     * type became today's task - see below) rather than this task's own outcome; misreading that
-     * as this task being blocked/cancelled was exactly the bug that mislabeled a fully-killed
-     * Turoth task as "blocked -120" when the points actually came from blocking an unrelated task.
-     * Otherwise: cancelled (delta == -30) vs. blocked (delta matches that master's known block
-     * price - only reachable here because the task did NOT complete, so the points loss really is
-     * this task's own block) vs. reset (delta == 0 and either the closing task's own master, or
-     * whichever master {@code afterClose} shows a new task from, is one of
+     * already reached 0 remaining) is checked first, but is no longer an unconditional win: a
+     * player can finish a task's kill count and then block that *same* task via the Rewards Shop
+     * before turning it in/getting reassigned (a common "grind it out, then block it" sequence),
+     * and that's still this task's own outcome, not an unrelated purchase - so a completed task
+     * whose points delta exactly matches its own closing master's block price is relabeled
+     * "blocked" instead. Anything else at 0 remaining forces "completed" with no points delta,
+     * because a kill-count task auto-completes the instant its counter hits 0 with no other window
+     * to act on it, so any *other* points movement measured across its lifetime is necessarily an
+     * unrelated reward-shop purchase (most commonly blocking a *different*, newly-assigned task);
+     * misreading that as this task being blocked/cancelled was exactly the bug that mislabeled a
+     * fully-killed Turoth task as "blocked -120" when the points actually came from blocking an
+     * unrelated task. Otherwise (task did NOT complete): cancelled (delta == -30) vs. blocked
+     * (delta matches that master's known block price) vs. reset (delta == 0 and either the closing
+     * task's own master, or whichever master {@code afterClose} shows a new task from, is one of
      * {@link #SLAYER_RESET_MASTERS} - a free Turael/Aya/Spria skip is granted by talking to one of
      * those three, not by the task *being closed* having come from one of them; checking only the
      * closing master missed the common case of skipping a higher-level master's task) vs. unknown
@@ -898,8 +916,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
         Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingMasterKey);
         String status;
         if (closingSnapshot.amountRemaining <= 0) {
-            status = "completed";
-            pointsDelta = 0;
+            if (blockPrice != null && pointsDelta == -blockPrice) {
+                status = "blocked";
+            } else {
+                status = "completed";
+                pointsDelta = 0;
+            }
         } else if (pointsDelta == -SLAYER_CANCEL_COST) {
             status = "cancelled";
         } else if (blockPrice != null && pointsDelta == -blockPrice) {
@@ -2028,6 +2050,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         Integer blockPrice = SLAYER_BLOCK_PRICE.get(currentRewardShopMaster.trim().toLowerCase());
         if (blockPrice == null) return;
+
+        // See suppressNextSlayerTaskSnapshotRefresh's javadoc - guards against a corrupted
+        // amountRemaining snapshot if this block un-assigns the currently tracked task and the
+        // resulting varp writes land a tick apart.
+        suppressNextSlayerTaskSnapshotRefresh = true;
 
         Player local = client.getLocalPlayer();
         if (local == null || local.getName() == null) return;
