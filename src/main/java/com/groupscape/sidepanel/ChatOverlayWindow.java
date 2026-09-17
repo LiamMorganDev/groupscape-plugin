@@ -135,7 +135,7 @@ public class ChatOverlayWindow extends JWindow {
             // No read-cursor divider here - this window has no unread concept of its own (spec
             // §6 gives it no "missed message" signal either); `0` suppresses `ChatPanel`'s
             // divider entirely, same as the sentinel before `GroupScapePanel`'s first tick.
-            chatPanel.refresh(chatState, 0L);
+            chatPanel.refresh(chatState, 0L, 0L);
         }
     }
 

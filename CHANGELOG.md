@@ -11,6 +11,9 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Inline Group Chat messages now show up in the Clan chat tab instead of the Game/All tab.
 - Group Chat backfill now always shows the last week of group history, not just whatever arrived since your last connect - a reconnect no longer looks like nothing was said.
 
+### Fixed
+- Sending a Group Chat message (or having one arrive while the Chat tab is already open) no longer briefly shows a "New" divider above it in that same panel - the divider only ever marks messages that were actually unread when you switched to the tab.
+
 ## [1.8.37] - 2026-09-17
 
 ### Fixed

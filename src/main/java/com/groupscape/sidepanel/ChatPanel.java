@@ -157,15 +157,16 @@ public class ChatPanel extends JPanel {
 
     /**
      * Re-renders the log from {@link ChatState} - a no-op rebuild when nothing's new since last
-     * call. {@code lastReadMessageId} is {@code GroupScapePanel}'s own read boundary
-     * ({@code lastSeenChatMessageId}), read here *before* that same refresh tick's
-     * {@code updateChatUnreadDot} call can advance it - same frozen-at-render timing as the
-     * webapp chat drawer's unread divider (see its {@code renderMessages}' doc comment).
+     * call. {@code lastReadMessageId}/{@code newestIdAtOpen} are {@code GroupScapePanel}'s frozen
+     * divider snapshot ({@code dividerSnapshotCursor}/{@code dividerSnapshotNewestId}, see
+     * {@code updateChatDividerSnapshot}'s doc comment) - bounding the divider search to messages
+     * that existed when the Chat tab was last opened means a message that arrives while it's
+     * already open (this account's own sent message included) never itself gets flagged unread.
      * Suppressed for a boundary of {@code <= 0} - the sentinel value before the panel's first
      * tick has run, and the "nothing read yet" state where there's no "already read" section to
      * draw a boundary under.
      */
-    public void refresh(ChatState chatState, long lastReadMessageId) {
+    public void refresh(ChatState chatState, long lastReadMessageId, long newestIdAtOpen) {
         List<ChatState.Entry> messages = chatState.all();
         if (messages.isEmpty()) return;
 
@@ -176,11 +177,14 @@ public class ChatPanel extends JPanel {
         boolean wasAtBottom = isScrolledToBottom();
 
         // Only draws a boundary when there's an actual "already read" section above it (index 0
-        // being first-unread would put the divider above everything - same as having none).
+        // being first-unread would put the divider above everything - same as having none), and
+        // only among messages that existed at `newestIdAtOpen` - anything newer arrived during
+        // this already-open viewing session and is treated as seen live, never flagged.
         int firstUnreadIndex = -1;
         if (lastReadMessageId > 0) {
             for (int i = 0; i < messages.size(); i++) {
-                if (messages.get(i).messageId > lastReadMessageId) {
+                ChatState.Entry entry = messages.get(i);
+                if (entry.messageId > lastReadMessageId && entry.messageId <= newestIdAtOpen) {
                     firstUnreadIndex = i;
                     break;
                 }

@@ -75,6 +75,10 @@ class GroupScapePanel extends PluginPanel {
     private volatile long lastSeenChatMessageId = -1;
     private volatile boolean windowFocused = true;
     private boolean focusListenerAttached = false;
+    // Chat divider boundary, frozen once per Chat-tab "viewing session" - see
+    // updateChatDividerSnapshot's doc comment. -1 means "not currently frozen".
+    private long dividerSnapshotCursor = -1;
+    private long dividerSnapshotNewestId = -1;
 
     GroupScapePanel(
             Runnable onOpenGroupScape,
@@ -145,10 +149,33 @@ class GroupScapePanel extends PluginPanel {
         refreshTimer = new Timer(REFRESH_MS, e -> {
             rosterListPanel.refresh(
                     rosterState.all(), groupSnapshotState, localMemberSupplier.get(), localSnapshotSupplier.get());
-            chatPanel.refresh(chatState, lastSeenChatMessageId);
+            updateChatDividerSnapshot(chatState);
+            chatPanel.refresh(chatState, dividerSnapshotCursor, dividerSnapshotNewestId);
             updateChatUnreadDot(chatState);
         });
         refreshTimer.start();
+    }
+
+    /**
+     * Freezes {@link #dividerSnapshotCursor}/{@link #dividerSnapshotNewestId} the instant the
+     * Chat tab becomes active, clearing them the instant it isn't - mirrors the webapp chat
+     * drawer's {@code open()}/{@code freezeDividerSnapshot} (see that doc comment for why a
+     * message that arrives *during* an already-active viewing session, this account's own sent
+     * message included, must never itself trigger the divider). Waits for {@link
+     * #updateChatUnreadDot}'s own first-tick initialization of {@link #lastSeenChatMessageId}
+     * before freezing (runs one tick later than that method in the timer above), so a Chat tab
+     * that's already active on plugin startup doesn't freeze against the sentinel `-1` and flag
+     * the entire backfilled history as unread.
+     */
+    private void updateChatDividerSnapshot(ChatState chatState) {
+        if (!TAB_CHAT.equals(activeTab)) {
+            dividerSnapshotCursor = -1;
+            dividerSnapshotNewestId = -1;
+            return;
+        }
+        if (dividerSnapshotCursor >= 0 || lastSeenChatMessageId < 0) return;
+        dividerSnapshotCursor = lastSeenChatMessageId;
+        dividerSnapshotNewestId = chatState.latestMessageId();
     }
 
     private void selectTab(String tab) {
