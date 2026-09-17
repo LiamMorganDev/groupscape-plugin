@@ -47,18 +47,6 @@ public class KillLootDeathEvents {
      * to give a late-arriving same-name {@code LootReceived} a chance to attach (see class doc). */
     private static final long LOOT_GRACE_MILLIS = 3000;
 
-    /** Doom of Mokhaiotl needs a much longer grace period than {@link #LOOT_GRACE_MILLIS}: its
-     * reward isn't a ground drop granted at the moment of the final delve-level despawn, but a
-     * separate interface claim (right-click the "Burrow hole" it leaves, "Investigate", then
-     * "Claim reward and exit") that the player triggers manually, often many seconds after the
-     * kill. The default 3s window was expiring and shipping the kill loot-less before the
-     * player could even open the reward menu, silently dropping the run's actual loot. */
-    private static final long DOOM_OF_MOKHAIOTL_LOOT_GRACE_MILLIS = 30000;
-
-    private static long lootGraceMillisFor(String npcName) {
-        return "Doom of Mokhaiotl".equals(npcName) ? DOOM_OF_MOKHAIOTL_LOOT_GRACE_MILLIS : LOOT_GRACE_MILLIS;
-    }
-
     private final List<PendingKill> pendingKills = new ArrayList<>();
     private final List<Map<String, Object>> pendingDeaths = new ArrayList<>();
     private final List<Map<String, Object>> pendingLoot = new ArrayList<>();
@@ -119,6 +107,11 @@ public class KillLootDeathEvents {
         // Peril") - the short display labels of whichever sub-bosses were actually killed that
         // run, in kill order. Absent for every ordinary single-NPC kill.
         List<String> subKills;
+        // Non-null only for the single synthesized "Doom of Mokhaiotl" kill created by
+        // GroupScapeTrackerPlugin#claimDoomOfMokhaiotlKill - the delve level the player had
+        // reached when they claimed rewards and left, scraped from the reward widget. Absent for
+        // every other kill, and absent even for a Doom kill if the scrape failed to find a level.
+        Integer delveLevel;
 
         PendingKill(int npcId, String npcName, int worldX, int worldY, int plane, int world) {
             this.npcId = npcId;
@@ -151,6 +144,9 @@ public class KillLootDeathEvents {
             }
             if (subKills != null) {
                 event.put("subKills", subKills);
+            }
+            if (delveLevel != null) {
+                event.put("delveLevel", delveLevel);
             }
             return event;
         }
@@ -192,6 +188,20 @@ public class KillLootDeathEvents {
                                           int worldX, int worldY, int plane, int world) {
         onKill(playerName, npcId, npcName, worldX, worldY, plane, world);
         pendingKills.get(pendingKills.size() - 1).subKills = subKills;
+    }
+
+    /**
+     * Like {@link #onKill}, but for the single synthesized "Doom of Mokhaiotl" kill created once
+     * the player claims rewards and leaves the delve (see
+     * {@code GroupScapeTrackerPlugin#claimDoomOfMokhaiotlKill}) - despawns at each individual
+     * delve level are never queued as their own kills, so only this one entry is ever shipped per
+     * delve run. {@code delveLevel} is the level reached when rewards were claimed, or
+     * {@code null} if it couldn't be read from the reward widget.
+     */
+    public synchronized void onDoomOfMokhaiotlKill(String playerName, int npcId, String npcName, Integer delveLevel,
+                                                    int worldX, int worldY, int plane, int world) {
+        onKill(playerName, npcId, npcName, worldX, worldY, plane, world);
+        pendingKills.get(pendingKills.size() - 1).delveLevel = delveLevel;
     }
 
     /**
@@ -307,7 +317,7 @@ public class KillLootDeathEvents {
         List<PendingKill> readyKills = new ArrayList<>();
         List<PendingKill> stillWaiting = new ArrayList<>();
         for (PendingKill kill : pendingKills) {
-            if (kill.loot != null || now - kill.createdAtMillis >= lootGraceMillisFor(kill.npcName)) {
+            if (kill.loot != null || now - kill.createdAtMillis >= LOOT_GRACE_MILLIS) {
                 readyKills.add(kill);
             } else {
                 stillWaiting.add(kill);

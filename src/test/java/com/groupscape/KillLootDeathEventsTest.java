@@ -86,29 +86,40 @@ public class KillLootDeathEventsTest {
     }
 
     @Test
-    public void consumeStateHoldsDoomOfMokhaiotlPastTheOrdinaryGraceWindow() throws InterruptedException {
-        // Doom of Mokhaiotl's reward is claimed via an interface ("Investigate" the burrow hole,
-        // then "Claim reward and exit"), not a same-tick ground drop, so it routinely lands well
-        // after the ordinary 3s LOOT_GRACE_MILLIS - the kill must still be held open for it.
+    public void onDoomOfMokhaiotlKillShipsOneEntryWithDelveLevel() {
+        // Individual delve-level despawns are never queued as their own kills (see
+        // GroupScapeTrackerPlugin#onNpcDespawned) - only this one synthesized kill, created at
+        // claim time, should ever be shipped for a delve run.
         KillLootDeathEvents events = new KillLootDeathEvents();
-        events.onKill("Zezima", 14707, "Doom of Mokhaiotl", 100, 200, 0, 301);
-
-        Thread.sleep(3100);
-
-        Map<String, Object> early = new HashMap<>();
-        early.put("name", "Zezima");
-        events.consumeState(early);
-        assertFalse("Doom of Mokhaiotl kill must outlive the ordinary 3s grace window", early.containsKey("events"));
-
+        events.onDoomOfMokhaiotlKill("Zezima", 14707, "Doom of Mokhaiotl", 5, 100, 200, 0, 301);
         events.onLoot("Doom of Mokhaiotl", List.of(Map.of("id", 554, "quantity", 266)));
 
-        Map<String, Object> later = new HashMap<>();
-        later.put("name", "Zezima");
-        events.consumeState(later);
+        Map<String, Object> output = new HashMap<>();
+        output.put("name", "Zezima");
+        events.consumeState(output);
 
-        assertTrue(later.containsKey("events"));
-        List<?> shipped = (List<?>) later.get("events");
+        assertTrue(output.containsKey("events"));
+        List<?> shipped = (List<?>) output.get("events");
         assertEquals(1, shipped.size());
-        assertEquals(List.of(Map.of("id", 554, "quantity", 266)), ((Map<?, ?>) shipped.get(0)).get("loot"));
+        Map<?, ?> kill = (Map<?, ?>) shipped.get(0);
+        assertEquals(5, kill.get("delveLevel"));
+        assertEquals(List.of(Map.of("id", 554, "quantity", 266)), kill.get("loot"));
+    }
+
+    @Test
+    public void onDoomOfMokhaiotlKillOmitsDelveLevelWhenUnobserved() {
+        // The reward widget scrape can fail to find a level (unverified wording match) - the kill
+        // must still ship rather than being dropped.
+        KillLootDeathEvents events = new KillLootDeathEvents();
+        events.onDoomOfMokhaiotlKill("Zezima", 14707, "Doom of Mokhaiotl", null, 100, 200, 0, 301);
+        events.onLoot("Doom of Mokhaiotl", List.of(Map.of("id", 554, "quantity", 266)));
+
+        Map<String, Object> output = new HashMap<>();
+        output.put("name", "Zezima");
+        events.consumeState(output);
+
+        assertTrue(output.containsKey("events"));
+        Map<?, ?> kill = (Map<?, ?>) ((List<?>) output.get("events")).get(0);
+        assertFalse("delveLevel must be absent, not null, when unobserved", kill.containsKey("delveLevel"));
     }
 }

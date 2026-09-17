@@ -707,6 +707,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
+        if (event.getGroupId() == DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP) {
+            captureDoomOfMokhaiotlDelveLevel();
+            return;
+        }
+
         if (event.getGroupId() != InterfaceID.CA_TASKS) return;
         if (doNotUseThisData()) return;
 
@@ -1722,6 +1727,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // Hunllef/Hueycoatl: he keels over and his corpse just sits there rather than despawning
         // at 0hp, so this never fires for his real death.
         if (DUKE_SUCELLUS_NPC_NAME.equals(name)) return;
+        // Doom of Mokhaiotl is handled exclusively by onLootReceived's synthesized kill (see
+        // DOOM_OF_MOKHAIOTL_NPC_NAME javadoc below) - it despawns once per delve level, but only
+        // the final "claim reward and exit" should ever be logged as a kill, not each level along
+        // the way. Falling through here would log one loot-less kill per level.
+        if (DOOM_OF_MOKHAIOTL_NPC_NAME.equals(name)) return;
 
         WorldPoint wp = npc.getWorldLocation();
         if (wp == null) return;
@@ -1794,6 +1804,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             claimPendingGauntletKill(event.getName());
             claimHueycoatlKill(event.getName());
             claimDukeSucellusKill(event.getName());
+            claimDoomOfMokhaiotlKill(event.getName());
             dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
         } else if (event.getType() == LootRecordType.EVENT) {
             String clueTier = ClueTier.extractTier(event.getName());
@@ -1898,6 +1909,36 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * loot drop being mistaken for a second kill. */
     private static final long DUKE_SUCELLUS_KILL_DEBOUNCE_MILLIS = 5000L;
     private long lastDukeSucellusKillMillis = 0;
+
+    /** See {@link #onNpcDespawned}'s javadoc for why Doom of Mokhaiotl's kill can't be logged
+     * there - it despawns once per delve level, but a delve run should only ever produce one
+     * activity feed/loot log entry, for the level the player was at when they claimed rewards and
+     * left. */
+    private static final String DOOM_OF_MOKHAIOTL_NPC_NAME = "Doom of Mokhaiotl";
+    /** Used only as the kill event's recorded npcId - detection itself doesn't depend on it. */
+    private static final int DOOM_OF_MOKHAIOTL_NPC_ID = 14707;
+    /** Same reasoning as {@link #HUEYCOATL_KILL_DEBOUNCE_MILLIS} - guards against a multi-roll
+     * loot drop being mistaken for a second kill. */
+    private static final long DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS = 5000L;
+    private long lastDoomOfMokhaiotlKillMillis = 0;
+
+    /** Widget group for the "Burrow hole" reward screen (shown after every delve level's kill,
+     * whether the player then claims or descends further) - the only place the current delve
+     * level is ever displayed, since despawn detection is deliberately suppressed for this boss
+     * (see {@link #onNpcDespawned}). Not an official RuneLite constant; identified by inspecting
+     * the live widget tree. */
+    private static final int DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP = 919;
+    /** Matches this widget's level/depth text (exact wording unverified against a live client -
+     * kept permissive across "Level"/"Depth" phrasing so a wording tweak doesn't silently break
+     * capture). */
+    private static final Pattern DOOM_OF_MOKHAIOTL_LEVEL_PATTERN = Pattern.compile(
+            "(?i)(?:delve )?(?:level|depth)\\s*:?\\s*(\\d+)");
+    /** Level captured off the reward widget the last time it loaded - carried into whichever kill
+     * {@link #claimDoomOfMokhaiotlKill} next synthesizes, then cleared. {@code null} if the
+     * player has claimed rewards before the widget loaded, or the text didn't match
+     * {@link #DOOM_OF_MOKHAIOTL_LEVEL_PATTERN} - the kill still ships without a level rather than
+     * being dropped. */
+    private Integer lastObservedDoomOfMokhaiotlDelveLevel;
 
     @Subscribe
     public void onChatMessage(ChatMessage event) {
@@ -2011,6 +2052,77 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         dataManager.getKillLootDeathEvents().onKill(
                 local.getName(), DUKE_SUCELLUS_NPC_ID, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+    }
+
+    /**
+     * Synthesizes the one Doom of Mokhaiotl kill for a delve run the moment its reward loot
+     * arrives (i.e. the player chose "Claim reward and exit" rather than descending further) -
+     * a no-op unless {@code npcName} is {@link #DOOM_OF_MOKHAIOTL_NPC_NAME}. Debounced against
+     * {@link #DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS} for the same reason as
+     * {@link #claimHueycoatlKill}. Attaches whatever level {@link #captureDoomOfMokhaiotlDelveLevel}
+     * last observed, then clears it so a stale level can't leak into a future run.
+     */
+    private void claimDoomOfMokhaiotlKill(String npcName) {
+        if (!DOOM_OF_MOKHAIOTL_NPC_NAME.equals(npcName)) return;
+        long now = System.currentTimeMillis();
+        if (now - lastDoomOfMokhaiotlKillMillis < DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS) return;
+        lastDoomOfMokhaiotlKillMillis = now;
+
+        Player local = client.getLocalPlayer();
+        WorldPoint wp = local == null ? null : local.getWorldLocation();
+        if (local == null || local.getName() == null || wp == null) return;
+
+        dataManager.getKillLootDeathEvents().onDoomOfMokhaiotlKill(
+                local.getName(), DOOM_OF_MOKHAIOTL_NPC_ID, npcName, lastObservedDoomOfMokhaiotlDelveLevel,
+                wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+        lastObservedDoomOfMokhaiotlDelveLevel = null;
+    }
+
+    /**
+     * Scans the Doom of Mokhaiotl reward widget's text for the current delve level, storing it in
+     * {@link #lastObservedDoomOfMokhaiotlDelveLevel} for {@link #claimDoomOfMokhaiotlKill} to pick
+     * up. This widget reloads at every level (whether the player then claims or descends further),
+     * so the stored value always reflects the most recent level by the time a claim happens.
+     */
+    private void captureDoomOfMokhaiotlDelveLevel() {
+        Widget root = client.getWidget(DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP, 0);
+        if (root == null) return;
+        Integer level = findDoomOfMokhaiotlLevelInWidgetTree(root);
+        if (level != null) {
+            lastObservedDoomOfMokhaiotlDelveLevel = level;
+        }
+    }
+
+    private Integer findDoomOfMokhaiotlLevelInWidgetTree(Widget widget) {
+        if (widget == null) return null;
+
+        String text = widget.getText();
+        if (text != null && !text.isEmpty()) {
+            Matcher m = DOOM_OF_MOKHAIOTL_LEVEL_PATTERN.matcher(Text.removeTags(text));
+            if (m.find()) {
+                try {
+                    return Integer.parseInt(m.group(1));
+                } catch (NumberFormatException ignored) {
+                    // Fall through and keep searching the rest of the tree.
+                }
+            }
+        }
+
+        Widget[] dynamicChildren = widget.getDynamicChildren();
+        if (dynamicChildren != null) {
+            for (Widget child : dynamicChildren) {
+                Integer found = findDoomOfMokhaiotlLevelInWidgetTree(child);
+                if (found != null) return found;
+            }
+        }
+        Widget[] staticChildren = widget.getStaticChildren();
+        if (staticChildren != null) {
+            for (Widget child : staticChildren) {
+                Integer found = findDoomOfMokhaiotlLevelInWidgetTree(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     /**
