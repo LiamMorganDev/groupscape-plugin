@@ -9,11 +9,11 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Fetches {@code GET /api/characters/{accountHash}/get-chat-messages?since=<cursor>} once per
- * connect (triggered from {@code GroupLinkListener#onLinked()}, mirroring how the party overlay
- * itself only becomes live once linked) and merges the page into {@link ChatState}. See the "!gs"
- * chat spec §6 - the delivery cursor is {@link ChatState#latestMessageId()}, so a reconnect only
- * backfills what arrived while disconnected instead of the full ~200-message cap every time.
+ * Fetches {@code GET /api/characters/{accountHash}/get-chat-messages} once per connect (triggered
+ * from {@code GroupLinkListener#onLinked()}, mirroring how the party overlay itself only becomes
+ * live once linked) and merges the page into {@link ChatState}. See the "!gs" chat spec §6 - the
+ * delivery cursor is tracked server-side per-account, not client-supplied, so a reconnect (even
+ * from a different device) only backfills what arrived since the account's own last delivery.
  */
 @Slf4j
 public class ChatBackfillClient {
@@ -32,7 +32,7 @@ public class ChatBackfillClient {
     public void fetch(String baseUrl, String accountHash, String apiKey) {
         if (baseUrl == null || accountHash == null || apiKey == null || apiKey.trim().isEmpty()) return;
 
-        String url = baseUrl + "/api/characters/" + accountHash + "/get-chat-messages?since=" + state.latestMessageId();
+        String url = baseUrl + "/api/characters/" + accountHash + "/get-chat-messages";
         HttpRequestService.HttpResponse response = httpRequestService.get(url, apiKey);
         if (!response.isSuccessful()) {
             log.debug("get-chat-messages failed: {} {}", response.getCode(), response.getBody());

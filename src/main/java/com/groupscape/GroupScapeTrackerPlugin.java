@@ -131,6 +131,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private ConfigManager configManager;
     private NavigationButton navigationButton;
+    private com.groupscape.sidepanel.ChatOverlayWindow chatOverlayWindow;
     private RosterState rosterState;
     private RosterClient rosterClient;
     private RosterNotifier rosterNotifier;
@@ -356,6 +357,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
             .build();
         clientToolbar.addNavigation(navigationButton);
 
+        chatOverlayWindow = new com.groupscape.sidepanel.ChatOverlayWindow(
+                rosterState, chatState, text -> chatSendManager.send(text, config), config, configManager);
+
         GroupLinkListener groupLinkListener = new GroupLinkListener() {
             @Override
             public void onLinkRequired() {
@@ -460,6 +464,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (navigationButton != null) {
             clientToolbar.removeNavigation(navigationButton);
             navigationButton = null;
+        }
+        if (chatOverlayWindow != null) {
+            chatOverlayWindow.shutdown();
+            chatOverlayWindow = null;
         }
         cachePotions = false;
         potionStoreVars = null;

@@ -2,6 +2,15 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.36] - 2026-09-17
+
+### Added
+- Group Chat: a new optional floating chat window (off by default) - toggle it on in plugin settings for an always-on-top, draggable chat box you can position anywhere over the game screen, independent of the side panel and chatbox.
+
+### Fixed
+- Group Chat backfill now tracks what you've already seen per-account on the server instead of per-device - switching between the plugin and different RuneLite clients no longer re-fetches the same recent history each time.
+- `!gs` chat messages typed directly in-game are now capped at 150 characters on your end too, matching the side panel's input box and the server's own limit - previously only the server enforced it.
+
 ## [1.8.35] - 2026-09-17
 
 ### Added

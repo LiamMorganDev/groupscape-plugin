@@ -41,7 +41,8 @@ public class ChatState {
         return new ArrayList<>(messagesById.values());
     }
 
-    /** The account's delivery cursor for backfill's {@code since} query param - see spec §6. */
+    /** The newest message id currently held, used to drive the side panel's read cursor (spec §6) -
+     * the delivery cursor itself is tracked server-side, not here. */
     public synchronized long latestMessageId() {
         return messagesById.isEmpty() ? 0 : messagesById.lastKey();
     }

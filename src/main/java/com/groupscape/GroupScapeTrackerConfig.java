@@ -803,4 +803,14 @@ public interface GroupScapeTrackerConfig extends Config {
     default boolean chatInlineEnabled() {
         return true;
     }
+
+    @ConfigItem(
+            keyName = "chatOverlayEnabled",
+            name = "Show floating chat overlay",
+            description = "Show an always-on-top, draggable group chat window over the game viewport, independent of the chatbox and sidepanel",
+            section = chatSection
+    )
+    default boolean chatOverlayEnabled() {
+        return false;
+    }
 }

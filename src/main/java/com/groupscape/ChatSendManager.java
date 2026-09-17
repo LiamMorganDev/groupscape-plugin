@@ -17,6 +17,8 @@ import net.runelite.api.Client;
 @Slf4j
 @Singleton
 public class ChatSendManager {
+    private static final int CHAT_MESSAGE_MAX_LEN = 150;
+
     private final Client client;
     private final HttpRequestService httpRequestService;
     private final ExecutorService sendExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -35,8 +37,10 @@ public class ChatSendManager {
         String text;
     }
 
-    /** Truncation to {@code CHAT_MESSAGE_MAX_LEN} happens server-side (see the "Message
-     * formatting and length limits" spec ticket) - this just forwards the raw captured text. */
+    /** Truncates silently to {@code CHAT_MESSAGE_MAX_LEN} (see the "Message formatting and length
+     * limits" spec ticket §8) before sending - the server truncates too, but callers like {@link
+     * ChatSuppressionSubscriber}'s in-game {@code !gs} capture never pass through the side panel's
+     * input field, so this is the only client-side enforcement point that covers every caller. */
     public void send(String text, GroupScapeTrackerConfig config) {
         String apiKey = config.apiKey().trim();
         long accountHashValue = client.getAccountHash();
@@ -46,7 +50,7 @@ public class ChatSendManager {
         }
 
         SendChatMessageRequestBody body = new SendChatMessageRequestBody();
-        body.text = text;
+        body.text = text.length() > CHAT_MESSAGE_MAX_LEN ? text.substring(0, CHAT_MESSAGE_MAX_LEN) : text;
 
         String url = httpRequestService.getBaseUrl() + "/api/characters/" + accountHashValue + "/send-chat-message";
         sendExecutor.submit(() -> {
