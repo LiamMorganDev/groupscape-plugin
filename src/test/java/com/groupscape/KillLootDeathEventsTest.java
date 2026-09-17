@@ -84,4 +84,31 @@ public class KillLootDeathEventsTest {
         assertTrue("kill must ship loot-less once the grace period elapses with no match", output.containsKey("events"));
         assertEquals(1, ((List<?>) output.get("events")).size());
     }
+
+    @Test
+    public void consumeStateHoldsDoomOfMokhaiotlPastTheOrdinaryGraceWindow() throws InterruptedException {
+        // Doom of Mokhaiotl's reward is claimed via an interface ("Investigate" the burrow hole,
+        // then "Claim reward and exit"), not a same-tick ground drop, so it routinely lands well
+        // after the ordinary 3s LOOT_GRACE_MILLIS - the kill must still be held open for it.
+        KillLootDeathEvents events = new KillLootDeathEvents();
+        events.onKill("Zezima", 14707, "Doom of Mokhaiotl", 100, 200, 0, 301);
+
+        Thread.sleep(3100);
+
+        Map<String, Object> early = new HashMap<>();
+        early.put("name", "Zezima");
+        events.consumeState(early);
+        assertFalse("Doom of Mokhaiotl kill must outlive the ordinary 3s grace window", early.containsKey("events"));
+
+        events.onLoot("Doom of Mokhaiotl", List.of(Map.of("id", 554, "quantity", 266)));
+
+        Map<String, Object> later = new HashMap<>();
+        later.put("name", "Zezima");
+        events.consumeState(later);
+
+        assertTrue(later.containsKey("events"));
+        List<?> shipped = (List<?>) later.get("events");
+        assertEquals(1, shipped.size());
+        assertEquals(List.of(Map.of("id", 554, "quantity", 266)), ((Map<?, ?>) shipped.get(0)).get("loot"));
+    }
 }

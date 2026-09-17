@@ -47,6 +47,18 @@ public class KillLootDeathEvents {
      * to give a late-arriving same-name {@code LootReceived} a chance to attach (see class doc). */
     private static final long LOOT_GRACE_MILLIS = 3000;
 
+    /** Doom of Mokhaiotl needs a much longer grace period than {@link #LOOT_GRACE_MILLIS}: its
+     * reward isn't a ground drop granted at the moment of the final delve-level despawn, but a
+     * separate interface claim (right-click the "Burrow hole" it leaves, "Investigate", then
+     * "Claim reward and exit") that the player triggers manually, often many seconds after the
+     * kill. The default 3s window was expiring and shipping the kill loot-less before the
+     * player could even open the reward menu, silently dropping the run's actual loot. */
+    private static final long DOOM_OF_MOKHAIOTL_LOOT_GRACE_MILLIS = 30000;
+
+    private static long lootGraceMillisFor(String npcName) {
+        return "Doom of Mokhaiotl".equals(npcName) ? DOOM_OF_MOKHAIOTL_LOOT_GRACE_MILLIS : LOOT_GRACE_MILLIS;
+    }
+
     private final List<PendingKill> pendingKills = new ArrayList<>();
     private final List<Map<String, Object>> pendingDeaths = new ArrayList<>();
     private final List<Map<String, Object>> pendingLoot = new ArrayList<>();
@@ -295,7 +307,7 @@ public class KillLootDeathEvents {
         List<PendingKill> readyKills = new ArrayList<>();
         List<PendingKill> stillWaiting = new ArrayList<>();
         for (PendingKill kill : pendingKills) {
-            if (kill.loot != null || now - kill.createdAtMillis >= LOOT_GRACE_MILLIS) {
+            if (kill.loot != null || now - kill.createdAtMillis >= lootGraceMillisFor(kill.npcName)) {
                 readyKills.add(kill);
             } else {
                 stillWaiting.add(kill);
