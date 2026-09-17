@@ -13,6 +13,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Sending a Group Chat message (or having one arrive while the Chat tab is already open) no longer briefly shows a "New" divider above it in that same panel - the divider only ever marks messages that were actually unread when you switched to the tab.
+- Killing Duke Sucellus no longer skips the loot log and activity feed - he doesn't despawn like most bosses when he dies, so the plugin was never registering the kill at all.
 
 ## [1.8.37] - 2026-09-17
 

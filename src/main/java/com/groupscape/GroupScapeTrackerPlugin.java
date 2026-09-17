@@ -1717,6 +1717,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // lift the shield, which isn't a kill at all - letting it fall through here would
         // misreport every attempt's mid-fight tail break as a loot-less kill.
         if (HUEYCOATL_NPC_NAME.equals(name) || name.startsWith("Hueycoatl tail")) return;
+        // Duke Sucellus is handled exclusively by onLootReceived's synthesized kill (see
+        // DUKE_SUCELLUS_NPC_NAME javadoc below) - same "non-standard health bar" gap as the
+        // Hunllef/Hueycoatl: he keels over and his corpse just sits there rather than despawning
+        // at 0hp, so this never fires for his real death.
+        if (DUKE_SUCELLUS_NPC_NAME.equals(name)) return;
 
         WorldPoint wp = npc.getWorldLocation();
         if (wp == null) return;
@@ -1788,6 +1793,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             }
             claimPendingGauntletKill(event.getName());
             claimHueycoatlKill(event.getName());
+            claimDukeSucellusKill(event.getName());
             dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
         } else if (event.getType() == LootRecordType.EVENT) {
             String clueTier = ClueTier.extractTier(event.getName());
@@ -1882,6 +1888,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final long HUEYCOATL_KILL_DEBOUNCE_MILLIS = 5000L;
     private long lastHueycoatlKillMillis = 0;
 
+    /** See {@link #onNpcDespawned}'s javadoc for why Duke Sucellus's kill can't be detected there -
+     * he keels over on death rather than despawning at 0hp, so the corpse just sits there until
+     * the room resets. */
+    private static final String DUKE_SUCELLUS_NPC_NAME = "Duke Sucellus";
+    /** Used only as the kill event's recorded npcId - detection itself doesn't depend on it. */
+    private static final int DUKE_SUCELLUS_NPC_ID = 12191;
+    /** Same reasoning as {@link #HUEYCOATL_KILL_DEBOUNCE_MILLIS} - guards against a multi-roll
+     * loot drop being mistaken for a second kill. */
+    private static final long DUKE_SUCELLUS_KILL_DEBOUNCE_MILLIS = 5000L;
+    private long lastDukeSucellusKillMillis = 0;
+
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) return;
@@ -1973,6 +1990,27 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         dataManager.getKillLootDeathEvents().onKill(
                 local.getName(), HUEYCOATL_NPC_ID, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+    }
+
+    /**
+     * Synthesizes a Duke Sucellus kill the moment his loot arrives, since despawn detection can't
+     * catch it (see {@link #onNpcDespawned}'s javadoc) - a no-op unless {@code npcName} is
+     * {@link #DUKE_SUCELLUS_NPC_NAME}. Debounced against
+     * {@link #DUKE_SUCELLUS_KILL_DEBOUNCE_MILLIS} for the same reason as
+     * {@link #claimHueycoatlKill}.
+     */
+    private void claimDukeSucellusKill(String npcName) {
+        if (!DUKE_SUCELLUS_NPC_NAME.equals(npcName)) return;
+        long now = System.currentTimeMillis();
+        if (now - lastDukeSucellusKillMillis < DUKE_SUCELLUS_KILL_DEBOUNCE_MILLIS) return;
+        lastDukeSucellusKillMillis = now;
+
+        Player local = client.getLocalPlayer();
+        WorldPoint wp = local == null ? null : local.getWorldLocation();
+        if (local == null || local.getName() == null || wp == null) return;
+
+        dataManager.getKillLootDeathEvents().onKill(
+                local.getName(), DUKE_SUCELLUS_NPC_ID, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
     }
 
     /**
