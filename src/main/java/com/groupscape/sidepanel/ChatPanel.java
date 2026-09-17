@@ -1,6 +1,7 @@
 package com.groupscape.sidepanel;
 
 import com.groupscape.roster.ChatState;
+import com.groupscape.roster.MemberMapIcons;
 import com.groupscape.roster.RosterMember;
 import com.groupscape.roster.RosterState;
 import java.awt.BorderLayout;
@@ -13,8 +14,8 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -30,21 +31,19 @@ import net.runelite.client.ui.FontManager;
 
 /**
  * Group chat tab's own view inside {@code GroupScapePanel}: a scrolling message log (card rows -
- * helmet-color swatch, name, text) plus an input box, matching the approved side-panel chat
- * mockup (spec §2/§6). Live receive comes from {@code RosterClient.ChatEventListener} appending
- * into {@link ChatState}; {@link #refresh} just re-renders whatever's there now, same
- * poll-a-shared-state pattern as {@link RosterListPanel}.
- *
- * <p>Helmet icon assets aren't sourced yet (spec §2's wiki icon pull is separate follow-up work) -
- * each row shows a color swatch in the member's existing GroupScape color instead, in the same
- * spot the real icon will occupy.
+ * helmet icon tinted to the member's color, name, text) plus an input box, matching the approved
+ * side-panel chat mockup (spec §2/§6). Live receive comes from
+ * {@code RosterClient.ChatEventListener} appending into {@link ChatState}; {@link #refresh} just
+ * re-renders whatever's there now, same poll-a-shared-state pattern as {@link RosterListPanel}.
  */
 public class ChatPanel extends JPanel {
     private static final int MAX_LEN = 150;
+    private static final int ICON_HEIGHT_PX = 18;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
     private final RosterState rosterState;
     private final Consumer<String> onSend;
+    private final MemberMapIcons memberIcons = new MemberMapIcons();
     private final JPanel log = new JPanel();
     private final JScrollPane scrollPane;
     private final JTextField input = new JTextField();
@@ -192,6 +191,7 @@ public class ChatPanel extends JPanel {
         String displayName = entry.memberName != null ? entry.memberName : "Unknown";
         RosterMember member = rosterState.findByName(displayName);
         Color color = member != null ? SidePanelTheme.memberColor(member.color) : SidePanelTheme.ACCENT;
+        String hex = member != null ? member.color : "#FF981F";
 
         JPanel row = new JPanel(new BorderLayout(6, 0)) {
             @Override
@@ -202,14 +202,11 @@ public class ChatPanel extends JPanel {
         row.setOpaque(false);
         row.setAlignmentX(LEFT_ALIGNMENT);
 
-        JPanel swatch = new JPanel();
-        swatch.setBackground(color);
-        swatch.setPreferredSize(new Dimension(20, 20));
-        swatch.setBorder(BorderFactory.createLineBorder(SidePanelTheme.BORDER));
-        JPanel swatchWrap = new JPanel(new BorderLayout());
-        swatchWrap.setOpaque(false);
-        swatchWrap.add(swatch, BorderLayout.NORTH);
-        row.add(swatchWrap, BorderLayout.WEST);
+        JLabel icon = new JLabel(new ImageIcon(memberIcons.get(hex, ICON_HEIGHT_PX)));
+        JPanel iconWrap = new JPanel(new BorderLayout());
+        iconWrap.setOpaque(false);
+        iconWrap.add(icon, BorderLayout.NORTH);
+        row.add(iconWrap, BorderLayout.WEST);
 
         JPanel body = new JPanel();
         body.setOpaque(false);
