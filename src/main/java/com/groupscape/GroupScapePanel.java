@@ -145,7 +145,7 @@ class GroupScapePanel extends PluginPanel {
         refreshTimer = new Timer(REFRESH_MS, e -> {
             rosterListPanel.refresh(
                     rosterState.all(), groupSnapshotState, localMemberSupplier.get(), localSnapshotSupplier.get());
-            chatPanel.refresh(chatState);
+            chatPanel.refresh(chatState, lastSeenChatMessageId);
             updateChatUnreadDot(chatState);
         });
         refreshTimer.start();

@@ -105,20 +105,21 @@ No new scoping mechanism — chat reuses the existing active-group precedent at 
 
 _[Chat history and backfill behavior](https://github.com/LiamMorganDev/groupscape-plugin/issues/12) · [New-message notification behavior](https://github.com/LiamMorganDev/groupscape-plugin/issues/15)_
 
-**Backfill (delivery cursor):**
+**Backfill (fixed history window — supersedes the original per-account delivery cursor):**
 
 - Inline Game/All tab: live-only, no backfill — it's a native shared widget with no GroupScape-owned scrollback.
-- Side panel, overlay, webapp: identical mechanism. On connect, backfill all messages with `message_id` greater than the account's last-seen cursor, capped at ~200 messages.
-- Cursor is per-account, server-side (not per-device) — switching devices doesn't look like a first-ever connect.
-- Cursor advances on **delivery**, not read: as soon as messages are pushed to any connected session, regardless of focus/visibility.
+- Side panel, overlay, webapp: identical mechanism. On connect, `GET /get-chat-messages` returns every message from the last **7 days** (`CHAT_HISTORY_DAYS`), capped at ~200 messages, oldest-first.
+- The window is per-group, not per-account — every session backfilling a group sees the same messages regardless of its own read/delivery history. The original design gated this on a per-account server-side "delivered up to" cursor that advanced on every backfill; that made a plain refresh (webapp) or reconnect (plugin) look like "nothing happened" for anything already delivered once, which read as message history silently disappearing. The fixed window replaces it outright — there is no more delivery cursor, `chat_delivery_cursors` table included.
+- A background job (`prune_old_chat_messages`, hourly) deletes rows older than `CHAT_HISTORY_DAYS` from `groupscape.chat_messages`, so the window is also the retention policy, not just a query filter — nothing extends past 7 days by outliving the delete job.
 
-**Notifications and read cursor (separate from the delivery cursor):**
+**Notifications and read cursor (unchanged — still separate from the history window):**
 
 Only two surface-states get a "missed message" signal: side panel (chat tab not active) and webapp (chat panel not visible, or browser tab lost OS focus). No signal for the inline Game tab (the live chat is the notification), the overlay when disabled, or a fully-closed webapp (no OS push).
 
 - **Side panel:** chat ships as a new internal tab inside the existing single `GroupScapePanel` (not a second toolbar icon). Plain unread dot (no count) on the chat tab. Also fires RuneLite's `Notifier` (tray flash/sound) on new messages — off by default, toggle in plugin settings. (First plugin use of `Notifier`.)
 - **Webapp:** badge dot on the Chat nav item, plus browser tab title/favicon change when the tab loses OS focus (Page Visibility API / `document.hasFocus()`). Does not reuse `toast-stack`'s per-event toast pattern — too chatty for a per-message toast.
-- **Read cursor:** new per-account, server-side cursor, distinct from the delivery cursor. Auto-advances only when the chat surface is both visible (tab/panel selected) **and** focused (window/client has OS focus) — merely having the tab selected while unfocused doesn't count as read. Advancing it broadcasts a new `ChatRead` websocket message to the account's other live sessions, clearing their dot/badge in real time (same live-push pattern as `color_update`/`DropEvent`).
+- **Read cursor:** per-account, server-side cursor (`groupscape.chat_read_cursors`). Auto-advances only when the chat surface is both visible (tab/panel selected) **and** focused (window/client has OS focus) — merely having the tab selected while unfocused doesn't count as read. Advancing it broadcasts a new `ChatRead` websocket message to the account's other live sessions, clearing their dot/badge in real time (same live-push pattern as `color_update`/`DropEvent`).
+- **Unread divider:** side panel and webapp both draw a divider line above the first message newer than the read cursor at the time the surface last rendered (frozen for that viewing session — it doesn't jump mid-session as `markRead`/`mark-chat-read` calls advance the cursor underneath it). Suppressed when the cursor is `0`/unset (nothing to distinguish as "already read" yet) or when everything currently in view is unread. Not drawn on the floating overlay window, which has no unread concept of its own per the no-signal list above.
 
 ## 7. Flood protection
 

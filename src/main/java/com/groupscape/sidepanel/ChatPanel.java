@@ -40,6 +40,8 @@ public class ChatPanel extends JPanel {
     private static final int MAX_LEN = 150;
     private static final int ICON_HEIGHT_PX = 18;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
+    /** Matches the webapp chat drawer's {@code --chat-unread-badge} - same red across surfaces. */
+    private static final Color UNREAD_DIVIDER = new Color(0xff, 0x4b, 0x4b);
 
     private final RosterState rosterState;
     private final Consumer<String> onSend;
@@ -153,8 +155,17 @@ public class ChatPanel extends JPanel {
         input.setText("");
     }
 
-    /** Re-renders the log from {@link ChatState} - a no-op rebuild when nothing's new since last call. */
-    public void refresh(ChatState chatState) {
+    /**
+     * Re-renders the log from {@link ChatState} - a no-op rebuild when nothing's new since last
+     * call. {@code lastReadMessageId} is {@code GroupScapePanel}'s own read boundary
+     * ({@code lastSeenChatMessageId}), read here *before* that same refresh tick's
+     * {@code updateChatUnreadDot} call can advance it - same frozen-at-render timing as the
+     * webapp chat drawer's unread divider (see its {@code renderMessages}' doc comment).
+     * Suppressed for a boundary of {@code <= 0} - the sentinel value before the panel's first
+     * tick has run, and the "nothing read yet" state where there's no "already read" section to
+     * draw a boundary under.
+     */
+    public void refresh(ChatState chatState, long lastReadMessageId) {
         List<ChatState.Entry> messages = chatState.all();
         if (messages.isEmpty()) return;
 
@@ -164,9 +175,26 @@ public class ChatPanel extends JPanel {
 
         boolean wasAtBottom = isScrolledToBottom();
 
+        // Only draws a boundary when there's an actual "already read" section above it (index 0
+        // being first-unread would put the divider above everything - same as having none).
+        int firstUnreadIndex = -1;
+        if (lastReadMessageId > 0) {
+            for (int i = 0; i < messages.size(); i++) {
+                if (messages.get(i).messageId > lastReadMessageId) {
+                    firstUnreadIndex = i;
+                    break;
+                }
+            }
+            if (firstUnreadIndex == 0) firstUnreadIndex = -1;
+        }
+
         log.removeAll();
-        for (ChatState.Entry entry : messages) {
-            log.add(buildRow(entry));
+        for (int i = 0; i < messages.size(); i++) {
+            if (i == firstUnreadIndex) {
+                log.add(buildUnreadDivider());
+                log.add(spacer());
+            }
+            log.add(buildRow(messages.get(i)));
             log.add(spacer());
         }
         log.revalidate();
@@ -185,6 +213,36 @@ public class ChatPanel extends JPanel {
     private void scrollToBottom() {
         JScrollBar bar = scrollPane.getVerticalScrollBar();
         bar.setValue(bar.getMaximum());
+    }
+
+    /** Minimal hairline rule - "NEW" label then a line running out to the panel edge, matching
+     * the webapp chat drawer's approved unread-divider design. */
+    private JPanel buildUnreadDivider() {
+        JPanel row = new JPanel(new BorderLayout(6, 0)) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+
+        JLabel label = new JLabel("NEW");
+        label.setFont(FontManager.getRunescapeSmallFont().deriveFont(9f));
+        label.setForeground(UNREAD_DIVIDER);
+        row.add(label, BorderLayout.WEST);
+
+        JPanel line = new JPanel();
+        line.setOpaque(true);
+        line.setBackground(UNREAD_DIVIDER);
+        line.setPreferredSize(new Dimension(1, 1));
+        JPanel lineWrap = new JPanel(new BorderLayout());
+        lineWrap.setOpaque(false);
+        lineWrap.setBorder(new EmptyBorder(label.getFont().getSize() / 2, 0, 0, 0));
+        lineWrap.add(line, BorderLayout.CENTER);
+        row.add(lineWrap, BorderLayout.CENTER);
+
+        return row;
     }
 
     private JPanel buildRow(ChatState.Entry entry) {

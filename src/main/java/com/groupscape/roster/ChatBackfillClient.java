@@ -12,8 +12,9 @@ import lombok.extern.slf4j.Slf4j;
  * Fetches {@code GET /api/characters/{accountHash}/get-chat-messages} once per connect (triggered
  * from {@code GroupLinkListener#onLinked()}, mirroring how the party overlay itself only becomes
  * live once linked) and merges the page into {@link ChatState}. See the "!gs" chat spec §6 - the
- * delivery cursor is tracked server-side per-account, not client-supplied, so a reconnect (even
- * from a different device) only backfills what arrived since the account's own last delivery.
+ * server always returns the same rolling last-week window for the group, regardless of this
+ * account's read/delivery state, so a reconnect never re-shows "nothing happened" for messages
+ * this client already has.
  */
 @Slf4j
 public class ChatBackfillClient {

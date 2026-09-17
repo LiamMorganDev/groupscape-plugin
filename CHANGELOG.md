@@ -4,8 +4,12 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ## [1.8.38] - 2026-09-17
 
+### Added
+- Group Chat side panel now marks unread messages with a "New" divider line, so it's clear where you left off.
+
 ### Changed
 - Inline Group Chat messages now show up in the Clan chat tab instead of the Game/All tab.
+- Group Chat backfill now always shows the last week of group history, not just whatever arrived since your last connect - a reconnect no longer looks like nothing was said.
 
 ## [1.8.37] - 2026-09-17
 
