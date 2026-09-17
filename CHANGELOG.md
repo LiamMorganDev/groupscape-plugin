@@ -2,6 +2,14 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.37] - 2026-09-17
+
+### Added
+- temp
+
+### Fixed
+- temp
+
 ## [1.8.36] - 2026-09-17
 
 ### Added

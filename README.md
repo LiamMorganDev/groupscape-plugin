@@ -34,6 +34,7 @@ Party up and group up with your friends — something RuneScape doesn't offer na
 * Health and position of NPCs the player is interacting with
 * Achievement diaries
 * Collection log
+* Group chat — prefix a chat message with `!gs` to relay it to your group instead of sending it as normal chat (side panel, optional floating overlay, and the website all show it live). Suppression only works for group members who have the plugin installed and its chat toggle on — a member without it (or with it disabled) still sends the literal `!gs ...` text to real public/clan chat.
 
 ## Setup
 

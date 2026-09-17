@@ -1478,7 +1478,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     private static final Color GROUPSCAPE_CHAT_COLOR = new Color(170, 0, 255);
-    private static final Color GS_TAG_COLOR = new Color(0, 200, 200);
 
     /**
      * Spec §2's "Inline in the Game/All chat tab" surface: printed for every incoming
@@ -1496,7 +1495,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 : GROUPSCAPE_CHAT_COLOR;
 
         String formatted = new ChatMessageBuilder()
-                .append(GS_TAG_COLOR, "[GS] ")
+                .append(GROUPSCAPE_CHAT_COLOR, "[GS] ")
                 .append(nameColor, displayName)
                 .append(ChatColorType.NORMAL)
                 .append(": " + payload.text)

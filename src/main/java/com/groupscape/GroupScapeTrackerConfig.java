@@ -787,7 +787,7 @@ public interface GroupScapeTrackerConfig extends Config {
     @ConfigItem(
             keyName = "chatEnabled",
             name = "Enable !gs chat",
-            description = "Capture !gs-prefixed Public/Clan chat and relay it to your group instead of sending it as normal chat",
+            description = "Capture !gs-prefixed Public/Clan chat and relay it to your group instead of sending it as normal chat. Only works for group members who also have this on - if someone in your group doesn't, their !gs messages still go out as real public/clan chat.",
             section = chatSection
     )
     default boolean chatEnabled() {

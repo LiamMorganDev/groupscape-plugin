@@ -174,34 +174,35 @@ public class SlayerTaskState implements ConsumableState {
     private static final int BOSS_TASK_ID = 98;
 
     private static String resolveTaskName(Client client, int taskId) {
-        boolean isBossTask = taskId == BOSS_TASK_ID;
-        if (isBossTask) {
-            Integer bossTaskId = resolveBossTaskId(client);
-            if (bossTaskId == null) return "Boss";
-            taskId = bossTaskId;
+        if (taskId == BOSS_TASK_ID) {
+            // SlayerTaskSublist.COL_TASK is already an encoded SlayerTask DB row reference, not a
+            // value to search SlayerTask.COL_ID for - RuneLite core's own SlayerPlugin passes it
+            // straight into getDBTableField. Searching by value here (as this used to) only works
+            // by chance for some bosses and returns no rows for others (confirmed against a live
+            // Barrows Brothers assignment, whose COL_TASK value never matches any COL_ID row).
+            Integer bossTaskRow = resolveBossTaskId(client, client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID));
+            if (bossTaskRow == null) return "Boss";
+
+            Object[] fields = client.getDBTableField(bossTaskRow, DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0);
+            return fields.length > 0 ? (String) fields[0] : "Boss";
         }
 
         List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerTask.ID, DBTableID.SlayerTask.COL_ID, 0, taskId);
-        // A boss-task's SLAYER_TARGET_BOSSID can resolve to a SlayerTaskSublist row whose COL_TASK
-        // id doesn't (yet, or ever, for this client/game state) have a matching SlayerTask row -
-        // seen in practice for Duke Sucellus and Barrows Brothers assignments that never recovered.
-        // Same "never leave a hasTask=true boss assignment permanently nameless" fallback as the
-        // bossTaskId-not-found case above, rather than surfacing as "Unknown task" forever.
-        if (rows.isEmpty()) return isBossTask ? "Boss" : null;
+        if (rows.isEmpty()) return null;
 
         Object[] fields = client.getDBTableField(rows.get(0), DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0);
-        if (fields.length > 0) return (String) fields[0];
-        return isBossTask ? "Boss" : null;
+        return fields.length > 0 ? (String) fields[0] : null;
     }
 
     /**
      * A boss-task assignment ({@code SLAYER_TARGET == BOSS_TASK_ID}) names which boss via {@code
      * VarbitID#SLAYER_TARGET_BOSSID} indexing {@code DBTableID.SlayerTaskSublist} rather than
      * directly via {@code DBTableID.SlayerTask} like every other task - this resolves that
-     * indirection to the real {@code SlayerTask} row id. Ported from RuneLite core's SlayerPlugin.
+     * indirection to the {@code SlayerTask} DB row (an opaque row reference, not a {@code COL_ID}
+     * value - pass it straight to {@code getDBTableField}, don't search {@code COL_ID} for it).
+     * Ported from RuneLite core's SlayerPlugin.
      */
-    private static Integer resolveBossTaskId(Client client) {
-        int bossVarbitId = client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID);
+    private static Integer resolveBossTaskId(Client client, int bossVarbitId) {
         List<Integer> rows = client.getDBRowsByValue(
                 DBTableID.SlayerTaskSublist.ID, DBTableID.SlayerTaskSublist.COL_TASK_SUBTABLE_ID, 0, bossVarbitId);
         if (rows.isEmpty()) return null;
