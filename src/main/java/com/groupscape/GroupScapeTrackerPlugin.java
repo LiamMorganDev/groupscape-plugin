@@ -1506,10 +1506,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final Color GROUPSCAPE_CHAT_COLOR = new Color(170, 0, 255);
 
     /**
-     * Spec §2's "Inline in the Game/All chat tab" surface: printed for every incoming
+     * Spec §2's "Inline in the Clan chat tab" surface: printed for every incoming
      * {@code !gs} message (including the sender's own, since the server is the single source
      * of truth and there's no optimistic local echo elsewhere). Live-only - no backfill here,
      * since {@link ChatMessageManager} has no GroupScape-owned scrollback to replay into.
+     * Uses {@link ChatMessageType#CLAN_MESSAGE} (a system-style line routed to the Clan tab)
+     * rather than an actual Clan Chat channel message, same as CONSOLE was used for the Game
+     * tab - no real clan membership required.
      */
     private void printInlineChatMessage(com.groupscape.roster.RosterWireTypes.ChatMessagePayload payload) {
         if (!config.chatInlineEnabled()) return;
@@ -1528,7 +1531,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 .build();
 
         chatMessageManager.queue(QueuedMessage.builder()
-                .type(ChatMessageType.CONSOLE)
+                .type(ChatMessageType.CLAN_MESSAGE)
                 .runeLiteFormattedMessage(formatted)
                 .build());
     }

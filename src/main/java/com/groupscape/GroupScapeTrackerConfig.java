@@ -796,8 +796,8 @@ public interface GroupScapeTrackerConfig extends Config {
 
     @ConfigItem(
             keyName = "chatInlineEnabled",
-            name = "Show chat in Game/All tab",
-            description = "Print group chat messages inline in the Game/All chat tab, tagged [GS]",
+            name = "Show chat in Clan tab",
+            description = "Print group chat messages inline in the Clan chat tab, tagged [GS]",
             section = chatSection
     )
     default boolean chatInlineEnabled() {

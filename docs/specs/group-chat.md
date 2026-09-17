@@ -4,7 +4,7 @@ Compiled from the [Group chat (!gs) spec](https://github.com/LiamMorganDev/group
 
 ## Destination
 
-In-game `!gs`-prefixed messages are captured client-side and suppressed from public chat, relayed via websocket to a persistent per-group chat log (DB-backed), and rendered on three configurable in-game surfaces — inline in the Game/All tab (default on), a GroupScape side-panel tab with send capability (default on), and an optional floating overlay (default off) — plus the webapp chat panel. Webapp users are full send/receive peers regardless of whether a game client is connected. Every chat line shows the sender's helmet icon rendered in their GroupScape member color.
+In-game `!gs`-prefixed messages are captured client-side and suppressed from public chat, relayed via websocket to a persistent per-group chat log (DB-backed), and rendered on three configurable in-game surfaces — inline in the Clan tab (default on), a GroupScape side-panel tab with send capability (default on), and an optional floating overlay (default off) — plus the webapp chat panel. Webapp users are full send/receive peers regardless of whether a game client is connected. Every chat line shows the sender's helmet icon rendered in their GroupScape member color.
 
 **Out of scope:** moderation/spam controls (muting, message deletion, profanity filtering) — trusted small-group assumption, consistent with GroupScape's existing full-visibility group data model.
 
@@ -26,7 +26,7 @@ Three surfaces ship, each behind its own settings toggle:
 
 | Surface | Default | Notes |
 |---|---|---|
-| Inline in the Game/All chat tab | **On** | Teal `[GS]` tag + colored name, printed alongside existing game spam. Live-only, no send capability here. |
+| Inline in the Clan chat tab | **On** | Teal `[GS]` tag + colored name, printed via `ChatMessageType.CLAN_MESSAGE` (no real clan membership required). Live-only, no send capability here. |
 | GroupScape side-panel tab | **On** (primary surface) | RuneLite-owned side panel (Party-plugin style) with its own input box — send + receive. A native chatbox tab is not feasible; RuneLite's plugin API cannot add to the chatbox tab strip, which is a game-client widget, not RuneLite UI. |
 | Floating overlay panel | **Off** (opt-in) | Always-on-top, draggable box over the viewport, independent of the chatbox. |
 

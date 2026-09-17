@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.38] - 2026-09-17
+
+### Changed
+- Inline Group Chat messages now show up in the Clan chat tab instead of the Game/All tab.
+
 ## [1.8.37] - 2026-09-17
 
 ### Fixed
