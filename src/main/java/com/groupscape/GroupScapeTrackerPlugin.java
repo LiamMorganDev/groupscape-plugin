@@ -229,6 +229,19 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@link #closeSlayerTask} runs. Skipping just the one push this flags lets the transition/close
      * that follows fall back to the last snapshot from *before* the block purchase instead. */
     private boolean suppressNextSlayerTaskSnapshotRefresh = false;
+    /** Task name (as matched from the Rewards Shop confirm text) and points cost of a block
+     * purchase just confirmed for the *currently tracked* task, set by
+     * {@link #handleSlayerRewardShopConfirm} and consumed by the very next {@link #closeSlayerTask}
+     * call for that same task. Exists because {@link #suppressNextSlayerTaskSnapshotRefresh} only
+     * protects {@code amountRemaining} from one corrupted push - it does nothing if the
+     * {@code SLAYER_POINTS} varp write also hasn't landed by the time {@link #closeSlayerTask} reads
+     * {@code afterClose.points()}, which still lets the amountRemaining==0 branch fall through to
+     * "completed" (pointsDelta reading 0 instead of the real {@code -blockPrice}) - exactly how a
+     * Hellhounds task blocked 23 seconds in got recorded as completing all 164 kills. Since the
+     * confirm click is unambiguous proof this task was blocked, {@link #closeSlayerTask} trusts this
+     * flag over its points-delta heuristic whenever it's set for the task being closed. */
+    private String pendingCurrentTaskBlockName;
+    private int pendingCurrentTaskBlockPrice;
     /** Guards {@link #restorePendingSlayerTaskCloseIfNeeded} to run at most once per plugin
      * session - it only has anything to do the first time a slayer-task push happens after
      * startup, since after that {@link #currentSlayerTaskEventId} is the source of truth again. */
@@ -980,7 +993,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 : null;
         Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingMasterKey);
         String status;
-        if (closingSnapshot.amountRemaining <= 0) {
+        boolean amountRemainingSuspectCorrupted = false;
+        if (pendingCurrentTaskBlockName != null && pendingCurrentTaskBlockName.equalsIgnoreCase(closingSnapshot.taskName)) {
+            status = "blocked";
+            pointsDelta = -pendingCurrentTaskBlockPrice;
+            pendingCurrentTaskBlockName = null;
+            amountRemainingSuspectCorrupted = true;
+        } else if (closingSnapshot.amountRemaining <= 0) {
             if (blockPrice != null && pointsDelta == -blockPrice) {
                 status = "blocked";
             } else if (pointsDelta == -SLAYER_CANCEL_COST) {
@@ -1000,13 +1019,20 @@ public class GroupScapeTrackerPlugin extends Plugin {
             status = "unknown";
         }
 
+        // A block confirmed via pendingCurrentTaskBlockName forces "blocked" precisely because
+        // amountRemaining is suspected corrupted (see that field's javadoc) - reporting it as the
+        // kill count would just reproduce the same bogus "completed at max kills" data this branch
+        // exists to prevent, so amount_done is left unknown (0) rather than trusted.
+        int amountDone = amountRemainingSuspectCorrupted
+                ? 0
+                : Math.max(0, closingSnapshot.initialAmount - closingSnapshot.amountRemaining);
         dataManager.getSlayerTaskCloseEvents().onTaskClosed(
                 playerName,
                 eventId,
                 closingSnapshot.taskName,
                 closingSnapshot.masterName,
                 status,
-                Math.max(0, closingSnapshot.initialAmount - closingSnapshot.amountRemaining),
+                amountDone,
                 closingSnapshot.initialAmount,
                 pointsDelta != 0 ? pointsDelta : null,
                 assignedAt);
@@ -2179,6 +2205,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // amountRemaining snapshot if this block un-assigns the currently tracked task and the
         // resulting varp writes land a tick apart.
         suppressNextSlayerTaskSnapshotRefresh = true;
+
+        // If this confirmed block is for the task currently being tracked, tell closeSlayerTask
+        // directly instead of leaving it to infer "blocked" from amountRemaining/pointsDelta - see
+        // pendingCurrentTaskBlockName's javadoc for why that inference is fragile.
+        if (currentSlayerTaskEventId != null && currentSlayerTaskLastSnapshot != null
+                && taskName.equalsIgnoreCase(currentSlayerTaskLastSnapshot.taskName)) {
+            pendingCurrentTaskBlockName = currentSlayerTaskLastSnapshot.taskName;
+            pendingCurrentTaskBlockPrice = blockPrice;
+            return;
+        }
 
         Player local = client.getLocalPlayer();
         if (local == null || local.getName() == null) return;

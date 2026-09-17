@@ -4,11 +4,8 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ## [1.8.37] - 2026-09-17
 
-### Added
-- temp
-
 ### Fixed
-- temp
+- A Slayer task blocked via the Rewards Shop right after being assigned could get logged as completed at full kills instead of blocked, which threw off stats like "fastest task."
 
 ## [1.8.36] - 2026-09-17
 
