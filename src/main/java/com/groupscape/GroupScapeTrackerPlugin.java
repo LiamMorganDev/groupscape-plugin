@@ -44,6 +44,9 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.WorldView;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.api.ChatMessageType;
+import net.runelite.client.chat.ChatColorType;
+import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
@@ -416,8 +419,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
                         raidMarkerState.end(payload);
                     }
                 },
-                (payload, ts) -> chatState.add(new ChatState.Entry(payload.messageId, payload.memberName, payload.text,
-                        parseTsOrNow(ts))),
+                (payload, ts) -> {
+                    chatState.add(new ChatState.Entry(payload.messageId, payload.memberName, payload.text,
+                            parseTsOrNow(ts)));
+                    printInlineChatMessage(payload);
+                },
                 panel::applyChatRead,
                 groupLinkListener);
         rosterNotifier = new RosterNotifier();
@@ -1464,6 +1470,35 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     private static final Color GROUPSCAPE_CHAT_COLOR = new Color(170, 0, 255);
+    private static final Color GS_TAG_COLOR = new Color(0, 200, 200);
+
+    /**
+     * Spec §2's "Inline in the Game/All chat tab" surface: printed for every incoming
+     * {@code !gs} message (including the sender's own, since the server is the single source
+     * of truth and there's no optimistic local echo elsewhere). Live-only - no backfill here,
+     * since {@link ChatMessageManager} has no GroupScape-owned scrollback to replay into.
+     */
+    private void printInlineChatMessage(com.groupscape.roster.RosterWireTypes.ChatMessagePayload payload) {
+        if (!config.chatInlineEnabled()) return;
+
+        String displayName = payload.memberName != null ? payload.memberName : "Unknown";
+        RosterMember member = rosterState.findByName(displayName);
+        Color nameColor = member != null
+                ? com.groupscape.sidepanel.SidePanelTheme.memberColor(member.color)
+                : GROUPSCAPE_CHAT_COLOR;
+
+        String formatted = new ChatMessageBuilder()
+                .append(GS_TAG_COLOR, "[GS] ")
+                .append(nameColor, displayName)
+                .append(ChatColorType.NORMAL)
+                .append(": " + payload.text)
+                .build();
+
+        chatMessageManager.queue(QueuedMessage.builder()
+                .type(ChatMessageType.CONSOLE)
+                .runeLiteFormattedMessage(formatted)
+                .build());
+    }
 
     private void sendChatMessage(String message) {
         String prefixed = ColorUtil.wrapWithColorTag("[gs] " + message, GROUPSCAPE_CHAT_COLOR);

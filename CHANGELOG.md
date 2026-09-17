@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.35] - 2026-09-17
+
+### Added
+- Group Chat messages now also show up inline in your Game/All chat tab, tagged `[GS]` in teal with the sender's name in their GroupScape color - not just in the side panel. Toggle it off in plugin settings if you'd rather keep it side-panel only.
+
 ## [1.8.34] - 2026-09-17
 
 ### Added
