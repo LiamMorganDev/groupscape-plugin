@@ -193,7 +193,12 @@ public class ChatPanel extends JPanel {
         RosterMember member = rosterState.findByName(displayName);
         Color color = member != null ? SidePanelTheme.memberColor(member.color) : SidePanelTheme.ACCENT;
 
-        JPanel row = new JPanel(new BorderLayout(6, 0));
+        JPanel row = new JPanel(new BorderLayout(6, 0)) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
         row.setOpaque(false);
         row.setAlignmentX(LEFT_ALIGNMENT);
 

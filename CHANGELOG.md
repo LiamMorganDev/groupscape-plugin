@@ -2,6 +2,12 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.33] - 2026-09-17
+
+### Fixed
+- Group Chat messages in the side panel Chat tab no longer show with huge empty gaps between the sender's swatch, name, and message text.
+- `!gs` now captures and relays your message no matter which chat tab you're typing in (All, Public, Clan, Private, Trade) - previously it only worked from Public/Clan and could leak into real chat from other tabs.
+
 ## [1.8.32] - 2026-09-17
 
 ### Added

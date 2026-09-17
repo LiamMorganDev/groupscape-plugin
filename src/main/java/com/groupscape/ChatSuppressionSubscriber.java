@@ -3,15 +3,14 @@ package com.groupscape;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ChatboxInput;
 
 /**
- * Captures {@code !gs}-prefixed Public/Clan chat before it reaches the OSRS server and reroutes
- * it to GroupScape instead - see the group chat spec, §1 (client-side capture and suppression).
- * Subscribes to {@link ChatboxInput}, RuneLite's pre-send hook (the same one {@code
+ * Captures {@code !gs}-prefixed chat, from any chat type/tab, before it reaches the OSRS server
+ * and reroutes it to GroupScape instead - see the group chat spec, §1 (client-side capture and
+ * suppression). Subscribes to {@link ChatboxInput}, RuneLite's pre-send hook (the same one {@code
  * ChatCommandManager} uses for {@code !kc}/{@code !pb}), rather than {@code ChatMessage} (which
  * only fires after the message has already gone out).
  *
@@ -44,18 +43,17 @@ public class ChatSuppressionSubscriber {
 
     @Subscribe
     public void onChatboxInput(ChatboxInput event) {
-        if (!config.chatEnabled()) return;
+        if (!config.chatEnabled()) {
+            log.debug("!gs: chatEnabled is off, skipping");
+            return;
+        }
 
         String value = event.getValue();
         if (value == null || !isGsCommand(value)) return;
 
-        // ChatboxInput.getChatType() is the raw client chat-type int the game is about to send
-        // with - ChatMessageType.of() decodes it the same way RuneLite decodes incoming
-        // ChatMessage events. Only Public/Clan are in scope (spec §1); Private/Trade are left
-        // untouched and send as normal chat.
-        ChatMessageType type = ChatMessageType.of(event.getChatType());
-        if (type != ChatMessageType.PUBLICCHAT && type != ChatMessageType.CLAN_CHAT) return;
-
+        // Captured regardless of chat type/tab (Public, Clan, Private, Trade, All, ...) - a
+        // !gs-prefixed line always reroutes to GroupScape and never sends as real chat, no matter
+        // which channel it was typed into.
         event.consume();
 
         String text = value.substring(COMMAND_PREFIX.length()).trim();
