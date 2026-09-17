@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.32] - 2026-09-17
+
+### Added
+- Group Chat: a new "Chat" tab next to the Roster tab in the side panel lets you see and send messages with your group. Messages sent to Public or Clan chat with a `!gs` prefix are captured and relayed to your group instead of going out as normal chat.
+
 ## [1.8.31] - 2026-09-17
 
 ### Fixed

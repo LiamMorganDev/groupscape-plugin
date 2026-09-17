@@ -776,4 +776,21 @@ public interface GroupScapeTrackerConfig extends Config {
     default int notableDropThreshold() {
         return 50000;
     }
+
+    @ConfigSection(
+            name = "Chat",
+            description = "Group chat (!gs) settings",
+            position = 10
+    )
+    String chatSection = "ChatSection";
+
+    @ConfigItem(
+            keyName = "chatEnabled",
+            name = "Enable !gs chat",
+            description = "Capture !gs-prefixed Public/Clan chat and relay it to your group instead of sending it as normal chat",
+            section = chatSection
+    )
+    default boolean chatEnabled() {
+        return true;
+    }
 }

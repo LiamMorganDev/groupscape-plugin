@@ -91,6 +91,13 @@ public class RosterWireTypes {
         public String markerId;
     }
 
+    public static class ChatMessagePayload {
+        public long messageId;
+        /** Nullable - an account with no resolved character can still send. */
+        public String memberName;
+        public String text;
+    }
+
     public static class WireVitals {
         public Integer hp;
         public Integer maxHp;

@@ -33,6 +33,7 @@ public class RosterClient {
     private static final String MARKER_START = "marker_start";
     private static final String MARKER_UPDATE = "marker_update";
     private static final String MARKER_END = "marker_end";
+    private static final String CHAT_MESSAGE = "chat_message";
 
     /** Notified when another group member's kill arrives over the websocket. */
     public interface KillEventListener {
@@ -67,6 +68,11 @@ public class RosterClient {
         void onMarkerEnd(RosterWireTypes.RaidMarkerEndPayload payload);
     }
 
+    /** Notified as a group chat message (in-game {@code !gs} or webapp-sent) arrives - see the "!gs" chat spec §3. */
+    public interface ChatEventListener {
+        void onChatMessage(RosterWireTypes.ChatMessagePayload payload, String ts);
+    }
+
     private final OkHttpClient okHttpClient;
     private final Gson gson;
     private final RosterState rosterState;
@@ -74,6 +80,7 @@ public class RosterClient {
     private final DropEventListener dropEventListener;
     private final PingEventListener pingEventListener;
     private final RaidMarkerEventListener raidMarkerEventListener;
+    private final ChatEventListener chatEventListener;
     private final GroupLinkListener groupLinkListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -90,7 +97,8 @@ public class RosterClient {
 
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
                          DropEventListener dropEventListener, PingEventListener pingEventListener,
-                         RaidMarkerEventListener raidMarkerEventListener, GroupLinkListener groupLinkListener) {
+                         RaidMarkerEventListener raidMarkerEventListener, ChatEventListener chatEventListener,
+                         GroupLinkListener groupLinkListener) {
         // Derived from the shared RuneLite client (never mutate that one - other plugins use it).
         // Without a ping interval, a half-open connection (e.g. the backend disappearing behind a
         // proxy/LB during a rebuild without sending a clean close) never fires onClosed/onFailure,
@@ -104,6 +112,7 @@ public class RosterClient {
         this.dropEventListener = dropEventListener;
         this.pingEventListener = pingEventListener;
         this.raidMarkerEventListener = raidMarkerEventListener;
+        this.chatEventListener = chatEventListener;
         this.groupLinkListener = groupLinkListener;
     }
 
@@ -259,6 +268,12 @@ public class RosterClient {
                         gson.fromJson(envelope.payload, RosterWireTypes.RaidMarkerEndPayload.class);
                 if (payload.markerId != null) {
                     raidMarkerEventListener.onMarkerEnd(payload);
+                }
+            } else if (CHAT_MESSAGE.equals(envelope.type)) {
+                RosterWireTypes.ChatMessagePayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.ChatMessagePayload.class);
+                if (payload.text != null) {
+                    chatEventListener.onChatMessage(payload, envelope.ts);
                 }
             }
         } catch (Exception e) {

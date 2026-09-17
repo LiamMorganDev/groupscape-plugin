@@ -2,6 +2,8 @@ package com.groupscape;
 
 import com.google.gson.Gson;
 import com.google.inject.Provides;
+import com.groupscape.roster.ChatBackfillClient;
+import com.groupscape.roster.ChatState;
 import com.groupscape.roster.GroupSnapshotClient;
 import com.groupscape.roster.GroupSnapshotMember;
 import com.groupscape.roster.GroupSnapshotState;
@@ -96,6 +98,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private CollectionLogWidgetSubscriber collectionLogWidgetSubscriber;
     @Inject
+    private ChatSuppressionSubscriber chatSuppressionSubscriber;
+    @Inject
+    private ChatSendManager chatSendManager;
+    @Inject
     private PortraitCaptureManager portraitCaptureManager;
     @Inject
     private GroupScapeTrackerConfig config;
@@ -125,6 +131,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private RosterNotifier rosterNotifier;
     private GroupSnapshotState groupSnapshotState;
     private GroupSnapshotClient groupSnapshotClient;
+    private ChatState chatState;
+    private ChatBackfillClient chatBackfillClient;
     private PartyFrameOverlay partyFrameOverlay;
     private TileHighlightOverlay tileHighlightOverlay;
     private MinimapLocationOverlay minimapLocationOverlay;
@@ -321,14 +329,19 @@ public class GroupScapeTrackerPlugin extends Plugin {
     protected void startUp() throws Exception {
         migrateDefaults_1_8_14();
         collectionLogWidgetSubscriber.startUp();
+        chatSuppressionSubscriber.startUp();
 
         rosterState = new RosterState();
         groupSnapshotState = new GroupSnapshotState();
         groupSnapshotClient = new GroupSnapshotClient(httpRequestService, gson, groupSnapshotState);
+        chatState = new ChatState();
+        chatBackfillClient = new ChatBackfillClient(httpRequestService, gson, chatState);
 
         GroupScapePanel panel = new GroupScapePanel(
                 () -> LinkBrowser.browse(httpRequestService.getBaseUrl()),
-                client, config, rosterState, groupSnapshotState, itemManager, skillIconManager, spriteManager,
+                client, config, rosterState, groupSnapshotState, chatState,
+                text -> chatSendManager.send(text, config),
+                itemManager, skillIconManager, spriteManager,
                 clientThread, () -> localMember, () -> localSnapshot);
         navigationButton = NavigationButton.builder()
             .tooltip("GroupScape")
@@ -348,6 +361,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
             @Override
             public void onLinked() {
                 linkRequiredWarningShown = false;
+                String apiKey = config.apiKey().trim();
+                long accountHashValue = client.getAccountHash();
+                if (!apiKey.isEmpty() && accountHashValue != -1) {
+                    // Runs on the WebSocket's own callback thread (see RosterClient.onOpen) - offload
+                    // the blocking backfill GET so it doesn't stall that connection's read loop.
+                    String accountHash = String.valueOf(accountHashValue);
+                    String baseUrl = httpRequestService.getBaseUrl();
+                    new Thread(() -> chatBackfillClient.fetch(baseUrl, accountHash, apiKey), "groupscape-chat-backfill")
+                            .start();
+                }
             }
         };
         dataManager.setGroupLinkListener(groupLinkListener);
@@ -390,6 +413,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
                         raidMarkerState.end(payload);
                     }
                 },
+                (payload, ts) -> chatState.add(new ChatState.Entry(payload.messageId, payload.memberName, payload.text,
+                        parseTsOrNow(ts))),
                 groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker(), spriteManager);
@@ -418,6 +443,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Override
     protected void shutDown() throws Exception {
         collectionLogWidgetSubscriber.shutDown();
+        chatSuppressionSubscriber.shutDown();
+        chatSendManager.shutdown();
 
         if (navigationButton != null) {
             clientToolbar.removeNavigation(navigationButton);
@@ -518,6 +545,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
         localMember = LocalRosterMemberFactory.build(client, dataManager.getNpcDialogueTracker(), rosterState);
         localSnapshot = LocalGroupSnapshotFactory.build(client);
+    }
+
+    /** {@code envelope.ts} is normally a valid ISO-8601 instant, but a live chat message shouldn't
+     * be dropped over a parse hiccup - falls back to "now", which is off by at most a network
+     * round trip. */
+    private static Instant parseTsOrNow(String ts) {
+        try {
+            return Instant.parse(ts);
+        } catch (Exception e) {
+            return Instant.now();
+        }
     }
 
     private void reconcileRosterConnection() {
