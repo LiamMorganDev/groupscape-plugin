@@ -71,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1632,6 +1633,34 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final Set<String> RAID_CHEST_NAMES = new HashSet<>(java.util.Arrays.asList(
             "Chambers of Xeric", "Theatre of Blood", "Tombs of Amascut"));
 
+    /** Short combo-entry label per brother, keyed by the varbit that flags them dead this run -
+     * see {@link #barrowsVerifiedKillLabels} and {@link ComboKillEvents}' class doc for why this
+     * replaces despawn-tracked detection for Barrows specifically. */
+    private static final Map<Integer, String> BARROWS_KILLED_VARBIT_LABELS = new LinkedHashMap<>();
+    static {
+        BARROWS_KILLED_VARBIT_LABELS.put(VarbitID.BARROWS_KILLED_DHAROK, "Dharok");
+        BARROWS_KILLED_VARBIT_LABELS.put(VarbitID.BARROWS_KILLED_AHRIM, "Ahrim");
+        BARROWS_KILLED_VARBIT_LABELS.put(VarbitID.BARROWS_KILLED_GUTHAN, "Guthan");
+        BARROWS_KILLED_VARBIT_LABELS.put(VarbitID.BARROWS_KILLED_KARIL, "Karil");
+        BARROWS_KILLED_VARBIT_LABELS.put(VarbitID.BARROWS_KILLED_TORAG, "Torag");
+        BARROWS_KILLED_VARBIT_LABELS.put(VarbitID.BARROWS_KILLED_VERAC, "Verac");
+    }
+
+    /** Which brothers the game itself says died this run, per {@code VarbitID.BARROWS_KILLED_*}
+     * (each 0/1, cleared on entering the tunnels and set as each brother dies) - authoritative,
+     * unlike {@link ComboKillEvents#onSubBossDespawned}'s despawn/health-ratio tracking, which
+     * production data showed silently missing some brothers (e.g. a run logging only 3 of 6
+     * killed) the same way it does for the Hunllef/Hueycoatl. Read at chest-loot time in
+     * {@link #onLootReceived} rather than cached earlier, since that's the one moment all six are
+     * guaranteed to have already been resolved for this run. */
+    private List<String> barrowsVerifiedKillLabels() {
+        List<String> labels = new ArrayList<>();
+        for (Map.Entry<Integer, String> entry : BARROWS_KILLED_VARBIT_LABELS.entrySet()) {
+            if (client.getVarbitValue(entry.getKey()) != 0) labels.add(entry.getValue());
+        }
+        return labels;
+    }
+
     @Subscribe
     public void onLootReceived(LootReceived event) {
         boolean claimedByRaidCompletion = false;
@@ -1671,9 +1700,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
                                 local.getName(), event.getName(),
                                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), items);
                     } else if (isComboChest) {
+                        List<String> verifiedLabels = "Barrows".equals(event.getName()) ? barrowsVerifiedKillLabels() : null;
                         dataManager.getComboKillEvents().onComboChestLoot(
                                 local.getName(), event.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(),
-                                items, dataManager.getKillLootDeathEvents());
+                                items, dataManager.getKillLootDeathEvents(), verifiedLabels);
                     } else {
                         dataManager.getKillLootDeathEvents().onChestOrClueLoot(
                                 local.getName(), isClue ? "clue" : "chest", event.getName(), clueTier,

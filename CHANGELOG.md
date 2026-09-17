@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.31] - 2026-09-17
+
+### Fixed
+- A Barrows run could undercount how many brothers you killed in the activity feed (e.g. showing 3 of 6) - kill detection now reads the game's own "brothers killed" flags instead of guessing from despawns, which was silently missing some brothers.
+
 ## [1.8.30] - 2026-09-17
 
 ### Fixed

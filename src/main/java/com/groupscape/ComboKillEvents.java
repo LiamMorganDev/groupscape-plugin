@@ -21,6 +21,16 @@ import java.util.Map;
  * it. A pending list idle for longer than {@link #STALE_MILLIS} (no sub-boss despawn and no chest
  * loot) is dropped rather than carried into a later, unrelated attempt - see
  * {@link #dropIfStale}. Must only be touched from the client thread.
+ *
+ * The despawn-tracked pending list is only a fallback, though: production data showed Barrows
+ * brothers' despawns silently missing the general "died at 0hp" heuristic in
+ * {@link GroupScapeTrackerPlugin#onNpcDespawned} for some brothers in a run (no despawn = no
+ * {@link #onSubBossDespawned} call at all, same class of gap as the Hunllef/Hueycoatl), which
+ * under-reported the combined kill. Barrows has an authoritative alternative - the
+ * {@code VarbitID.BARROWS_KILLED_*} flags - so {@link #onComboChestLoot}'s caller reads those
+ * directly and passes them in as {@code verifiedLabelsOverride} instead of trusting the pending
+ * list for that combo. Moons of Peril has no equivalent varbit, so it still relies on the pending
+ * list built from despawns.
  */
 public class ComboKillEvents {
     /** No sub-boss death or chest loot arriving within 20 minutes of the last activity means the
@@ -130,21 +140,33 @@ public class ComboKillEvents {
      * separate {@code onLoot} call for the caller to make, since an empty/stale pending set (see
      * below) means there may be no kill at all to attach the loot to.
      *
+     * @param verifiedLabelsOverride when non-null, used in place of the despawn-tracked pending
+     * list for this flush - e.g. Barrows brothers' deaths, read straight from their
+     * {@code VarbitID.BARROWS_KILLED_*} flags in {@link GroupScapeTrackerPlugin#onLootReceived},
+     * since despawn/health-ratio detection silently misses some brothers in production (see that
+     * call site's javadoc) the same way it does for the Hunllef/Hueycoatl. Null keeps the
+     * existing despawn-tracked behavior (Moons of Peril, which has no equivalent varbit).
      * @return true if {@code sourceName} matched a combo chest (caller should treat this loot as
      * claimed rather than falling back to a standalone chest "loot" event) - even when nothing
      * ends up logged (see below)
      */
     public synchronized boolean onComboChestLoot(String playerName, String sourceName, int worldX, int worldY,
                                                   int plane, int world, List<Map<String, Object>> items,
-                                                  KillLootDeathEvents killLootDeathEvents) {
+                                                  KillLootDeathEvents killLootDeathEvents,
+                                                  List<String> verifiedLabelsOverride) {
         for (ComboDefinition combo : COMBOS) {
             if (!combo.chestLootName.equals(sourceName)) continue;
 
             Pending pending = pendingByCombo.remove(combo);
-            if (pending != null) {
-                dropIfStale(pending);
+            List<String> labels;
+            if (verifiedLabelsOverride != null) {
+                labels = verifiedLabelsOverride;
+            } else {
+                if (pending != null) {
+                    dropIfStale(pending);
+                }
+                labels = pending != null ? new ArrayList<>(pending.labelsInKillOrder) : new ArrayList<>();
             }
-            List<String> labels = pending != null ? new ArrayList<>(pending.labelsInKillOrder) : new ArrayList<>();
             // Empty/stale pending set on a combo that requires verified sub-kills (Barrows):
             // nothing verified as killed this run, so nothing is logged (no misleading empty-
             // bracket or guessed-full-run entry) - the chest loot itself is still consumed as
