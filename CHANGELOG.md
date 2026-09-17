@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.34] - 2026-09-17
+
+### Added
+- Group Chat's unread dot on the side panel's Chat tab now stays in sync with your other devices - read a message on the website or another RuneLite client, and the dot clears here too, live.
+
 ## [1.8.33] - 2026-09-17
 
 ### Fixed

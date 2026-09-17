@@ -34,6 +34,7 @@ public class RosterClient {
     private static final String MARKER_UPDATE = "marker_update";
     private static final String MARKER_END = "marker_end";
     private static final String CHAT_MESSAGE = "chat_message";
+    private static final String CHAT_READ = "chat_read";
 
     /** Notified when another group member's kill arrives over the websocket. */
     public interface KillEventListener {
@@ -73,6 +74,13 @@ public class RosterClient {
         void onChatMessage(RosterWireTypes.ChatMessagePayload payload, String ts);
     }
 
+    /** Notified as any of the account's sessions advances its read cursor - see the "!gs" chat
+     * spec §6. Kept as its own interface (rather than a second method on {@link ChatEventListener})
+     * so that interface stays a plain functional interface for its existing lambda callers. */
+    public interface ChatReadEventListener {
+        void onChatRead(RosterWireTypes.ChatReadPayload payload);
+    }
+
     private final OkHttpClient okHttpClient;
     private final Gson gson;
     private final RosterState rosterState;
@@ -81,6 +89,7 @@ public class RosterClient {
     private final PingEventListener pingEventListener;
     private final RaidMarkerEventListener raidMarkerEventListener;
     private final ChatEventListener chatEventListener;
+    private final ChatReadEventListener chatReadEventListener;
     private final GroupLinkListener groupLinkListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -98,7 +107,7 @@ public class RosterClient {
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
                          DropEventListener dropEventListener, PingEventListener pingEventListener,
                          RaidMarkerEventListener raidMarkerEventListener, ChatEventListener chatEventListener,
-                         GroupLinkListener groupLinkListener) {
+                         ChatReadEventListener chatReadEventListener, GroupLinkListener groupLinkListener) {
         // Derived from the shared RuneLite client (never mutate that one - other plugins use it).
         // Without a ping interval, a half-open connection (e.g. the backend disappearing behind a
         // proxy/LB during a rebuild without sending a clean close) never fires onClosed/onFailure,
@@ -113,6 +122,7 @@ public class RosterClient {
         this.pingEventListener = pingEventListener;
         this.raidMarkerEventListener = raidMarkerEventListener;
         this.chatEventListener = chatEventListener;
+        this.chatReadEventListener = chatReadEventListener;
         this.groupLinkListener = groupLinkListener;
     }
 
@@ -274,6 +284,12 @@ public class RosterClient {
                         gson.fromJson(envelope.payload, RosterWireTypes.ChatMessagePayload.class);
                 if (payload.text != null) {
                     chatEventListener.onChatMessage(payload, envelope.ts);
+                }
+            } else if (CHAT_READ.equals(envelope.type)) {
+                RosterWireTypes.ChatReadPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.ChatReadPayload.class);
+                if (payload.memberName != null && payload.messageId > 0) {
+                    chatReadEventListener.onChatRead(payload);
                 }
             }
         } catch (Exception e) {

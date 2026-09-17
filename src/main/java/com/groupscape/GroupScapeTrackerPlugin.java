@@ -102,6 +102,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private ChatSendManager chatSendManager;
     @Inject
+    private ChatMarkReadManager chatMarkReadManager;
+    @Inject
     private PortraitCaptureManager portraitCaptureManager;
     @Inject
     private GroupScapeTrackerConfig config;
@@ -341,6 +343,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 () -> LinkBrowser.browse(httpRequestService.getBaseUrl()),
                 client, config, rosterState, groupSnapshotState, chatState,
                 text -> chatSendManager.send(text, config),
+                chatMarkReadManager,
                 itemManager, skillIconManager, spriteManager,
                 clientThread, () -> localMember, () -> localSnapshot);
         navigationButton = NavigationButton.builder()
@@ -415,6 +418,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 },
                 (payload, ts) -> chatState.add(new ChatState.Entry(payload.messageId, payload.memberName, payload.text,
                         parseTsOrNow(ts))),
+                panel::applyChatRead,
                 groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker(), spriteManager);
@@ -445,6 +449,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         collectionLogWidgetSubscriber.shutDown();
         chatSuppressionSubscriber.shutDown();
         chatSendManager.shutdown();
+        chatMarkReadManager.shutdown();
 
         if (navigationButton != null) {
             clientToolbar.removeNavigation(navigationButton);

@@ -98,6 +98,16 @@ public class RosterWireTypes {
         public String text;
     }
 
+    /** {@code chat_read} envelope - fires when any of the account's sessions advances its
+     * server-side read cursor (spec §6). {@code memberName} identifies whose cursor advanced, the
+     * same self-filtering pattern as {@code ChatRateLimitedPayload} on the server side - the
+     * receiver checks it against the local player's own name to tell "one of my other sessions
+     * just read chat" apart from "someone else in the group did". */
+    public static class ChatReadPayload {
+        public String memberName;
+        public long messageId;
+    }
+
     public static class WireVitals {
         public Integer hp;
         public Integer maxHp;
