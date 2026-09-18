@@ -285,7 +285,14 @@ public class KillLootDeathEvents {
         pendingLoot.add(loot);
     }
 
-    public synchronized void onDeath(String playerName, int worldX, int worldY, int plane, int world, String killerName) {
+    /**
+     * @param doomDelveLevel the Doom of Mokhaiotl delve level the player was on when they died,
+     *                       read live from {@code VarPlayerID.DOM_CURRENT_LEVEL_TEMP} at death
+     *                       time (see {@code GroupScapeTrackerPlugin#onActorDeath}) - {@code null}
+     *                       outside a delve run.
+     */
+    public synchronized void onDeath(String playerName, int worldX, int worldY, int plane, int world,
+                                      String killerName, Integer doomDelveLevel) {
         owner = playerName;
         Map<String, Object> death = new HashMap<>();
         death.put("type", "death");
@@ -297,6 +304,9 @@ public class KillLootDeathEvents {
         death.put("eventId", UUID.randomUUID().toString());
         if (killerName != null) {
             death.put("killerName", killerName);
+        }
+        if (doomDelveLevel != null) {
+            death.put("doomDelveLevel", doomDelveLevel);
         }
         pendingDeaths.add(death);
     }

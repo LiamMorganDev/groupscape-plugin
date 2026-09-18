@@ -2224,7 +2224,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 ? lastHitsplatAttackerName
                 : (interacting != null ? interacting.getName() : null);
         lastHitsplatAttackerName = null;
-        pendingDeathCandidate = new PendingDeathCandidate(local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName);
+        // Live current-delve-level varp, not the post-kill reward widget scrape used for
+        // claimDoomOfMokhaiotlKill - a death mid-fight never reaches that widget, so this is the
+        // only source for "what level were they on" here. Reads 0 outside a delve run.
+        int doomLevel = client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP);
+        Integer doomDelveLevel = doomLevel > 0 ? doomLevel : null;
+        pendingDeathCandidate = new PendingDeathCandidate(
+                local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName, doomDelveLevel);
         pendingDeathConfirmTicks = DEATH_CONFIRM_TICKS;
     }
 
@@ -2236,8 +2242,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
         pendingDeathCandidate = null;
         if (client.getBoostedSkillLevel(Skill.HITPOINTS) > 0) return;
 
-        dataManager.getKillLootDeathEvents().onDeath(
-                candidate.playerName, candidate.x, candidate.y, candidate.plane, candidate.world, candidate.killerName);
+        dataManager.getKillLootDeathEvents().onDeath(candidate.playerName, candidate.x, candidate.y, candidate.plane,
+                candidate.world, candidate.killerName, candidate.doomDelveLevel);
     }
 
     private static final class PendingDeathCandidate {
@@ -2247,14 +2253,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
         final int plane;
         final int world;
         final String killerName;
+        final Integer doomDelveLevel;
 
-        PendingDeathCandidate(String playerName, int x, int y, int plane, int world, String killerName) {
+        PendingDeathCandidate(String playerName, int x, int y, int plane, int world, String killerName,
+                               Integer doomDelveLevel) {
             this.playerName = playerName;
             this.x = x;
             this.y = y;
             this.plane = plane;
             this.world = world;
             this.killerName = killerName;
+            this.doomDelveLevel = doomDelveLevel;
         }
     }
 

@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.39] - 2026-09-18
+
+### Added
+- Dying to Doom of Mokhaiotl now shows which delve level you died on, in the loot log's death entry and the Discord death notification.
+
 ## [1.8.38] - 2026-09-17
 
 ### Added

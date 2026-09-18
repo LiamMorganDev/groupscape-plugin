@@ -14,7 +14,7 @@ public class KillLootDeathEventsTest {
     @Test
     public void consumeStateAttachesEventsWhenOwnerMatches() {
         KillLootDeathEvents events = new KillLootDeathEvents();
-        events.onDeath("Zezima", 100, 200, 0, 301, "Vorkath");
+        events.onDeath("Zezima", 100, 200, 0, 301, "Vorkath", null);
 
         Map<String, Object> output = new HashMap<>();
         output.put("name", "Zezima");
@@ -27,7 +27,7 @@ public class KillLootDeathEventsTest {
     @Test
     public void consumeStateRetriesInsteadOfDroppingOnOwnerMismatch() {
         KillLootDeathEvents events = new KillLootDeathEvents();
-        events.onDeath("Zezima", 100, 200, 0, 301, "Vorkath");
+        events.onDeath("Zezima", 100, 200, 0, 301, "Vorkath", null);
 
         // A flush for a different member's snapshot arrives first (e.g. a transient
         // local-player-name hiccup around a death/teleport) - the death must not be dropped.
@@ -44,6 +44,32 @@ public class KillLootDeathEventsTest {
 
         assertTrue("event must survive to be attached on a later matching flush", matched.containsKey("events"));
         assertEquals(1, ((List<?>) matched.get("events")).size());
+    }
+
+    @Test
+    public void onDeathAttachesDoomDelveLevelWhenPresent() {
+        KillLootDeathEvents events = new KillLootDeathEvents();
+        events.onDeath("Zezima", 100, 200, 0, 301, "Doom of Mokhaiotl", 5);
+
+        Map<String, Object> output = new HashMap<>();
+        output.put("name", "Zezima");
+        events.consumeState(output);
+
+        Map<?, ?> death = (Map<?, ?>) ((List<?>) output.get("events")).get(0);
+        assertEquals(5, death.get("doomDelveLevel"));
+    }
+
+    @Test
+    public void onDeathOmitsDoomDelveLevelWhenAbsent() {
+        KillLootDeathEvents events = new KillLootDeathEvents();
+        events.onDeath("Zezima", 100, 200, 0, 301, "Vorkath", null);
+
+        Map<String, Object> output = new HashMap<>();
+        output.put("name", "Zezima");
+        events.consumeState(output);
+
+        Map<?, ?> death = (Map<?, ?>) ((List<?>) output.get("events")).get(0);
+        assertFalse(death.containsKey("doomDelveLevel"));
     }
 
     @Test
