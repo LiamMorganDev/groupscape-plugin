@@ -2,6 +2,14 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.41] - 2026-09-18
+
+### Fixed
+- A claimed Doom of Mokhaiotl run now actually appears in the loot log and activity feed - the reward is granted through a different kind of loot event than expected, so the previous fix for this never actually fired.
+
+### Changed
+- Internal: kept the temporary Doom of Mokhaiotl diagnostic logging in place a bit longer, now dumping the reward widget's text so the delve level (still coming back blank) can be fixed next.
+
 ## [1.8.40] - 2026-09-18
 
 ### Changed

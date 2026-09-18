@@ -1793,14 +1793,22 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Subscribe
     public void onLootReceived(LootReceived event) {
         boolean claimedByRaidCompletion = false;
-        // TEMPORARY: diagnosing a report that a claimed Doom of Mokhaiotl delve never showed up in
-        // the loot log/activity feed despite the fix in 962fb0c - logs every loot event even
-        // loosely matching the boss's name so we can see whether it's actually arriving as
-        // LootRecordType.NPC (what claimDoomOfMokhaiotlKill below expects) or something else, e.g.
-        // EVENT, since the reward is granted through an interface claim rather than a ground drop.
-        // Remove once confirmed.
-        if (event.getName() != null && event.getName().toLowerCase().contains("mokhaiotl")) {
-            log.info("[Doom diag] LootReceived type={} name='{}' items={}", event.getType(), event.getName(), event.getItems());
+        // Confirmed live (see claimDoomOfMokhaiotlKill javadoc): the delve reward arrives as
+        // LootRecordType.EVENT, not NPC, since it's granted through an interface claim ("Claim
+        // reward and exit") rather than a same-tick ground drop. Handled here, ahead of the
+        // NPC/EVENT split below, so it doesn't need to fit either branch's other assumptions.
+        if (DOOM_OF_MOKHAIOTL_NPC_NAME.equals(event.getName())) {
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (ItemStack item : event.getItems()) {
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("itemId", itemManager.canonicalize(item.getId()));
+                entry.put("quantity", item.getQuantity());
+                items.add(entry);
+            }
+            claimDoomOfMokhaiotlKill(event.getName());
+            dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
+            checkNotableDrop(event.getType(), event.getName(), event.getItems());
+            return;
         }
         if (event.getType() == LootRecordType.NPC) {
             List<Map<String, Object>> items = new ArrayList<>();
@@ -1813,7 +1821,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
             claimPendingGauntletKill(event.getName());
             claimHueycoatlKill(event.getName());
             claimDukeSucellusKill(event.getName());
-            claimDoomOfMokhaiotlKill(event.getName());
             dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
         } else if (event.getType() == LootRecordType.EVENT) {
             String clueTier = ClueTier.extractTier(event.getName());
@@ -2073,23 +2080,18 @@ public class GroupScapeTrackerPlugin extends Plugin {
      */
     private void claimDoomOfMokhaiotlKill(String npcName) {
         if (!DOOM_OF_MOKHAIOTL_NPC_NAME.equals(npcName)) return;
-        // TEMPORARY diagnostic, see onLootReceived - remove alongside it once confirmed.
-        log.info("[Doom diag] claimDoomOfMokhaiotlKill entered, lastObservedLevel={}", lastObservedDoomOfMokhaiotlDelveLevel);
         long now = System.currentTimeMillis();
-        if (now - lastDoomOfMokhaiotlKillMillis < DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS) {
-            log.info("[Doom diag] suppressed by debounce ({}ms since last)", now - lastDoomOfMokhaiotlKillMillis);
-            return;
-        }
+        if (now - lastDoomOfMokhaiotlKillMillis < DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS) return;
         lastDoomOfMokhaiotlKillMillis = now;
 
         Player local = client.getLocalPlayer();
         WorldPoint wp = local == null ? null : local.getWorldLocation();
-        if (local == null || local.getName() == null || wp == null) {
-            log.info("[Doom diag] dropped, local player or worldpoint unavailable (local={}, wp={})", local, wp);
-            return;
-        }
+        if (local == null || local.getName() == null || wp == null) return;
 
-        log.info("[Doom diag] queuing synthesized kill at level {}", lastObservedDoomOfMokhaiotlDelveLevel);
+        // TEMPORARY diagnostic - the reward widget scrape has come back null on every observed
+        // run so far; confirms the kill itself now ships (see onLootReceived) but the delve level
+        // is still going missing. Remove once the level pattern is fixed.
+        log.info("[Doom diag] shipping kill, lastObservedLevel={}", lastObservedDoomOfMokhaiotlDelveLevel);
         dataManager.getKillLootDeathEvents().onDoomOfMokhaiotlKill(
                 local.getName(), DOOM_OF_MOKHAIOTL_NPC_ID, npcName, lastObservedDoomOfMokhaiotlDelveLevel,
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
@@ -2110,9 +2112,32 @@ public class GroupScapeTrackerPlugin extends Plugin {
             return;
         }
         Integer level = findDoomOfMokhaiotlLevelInWidgetTree(root);
-        log.info("[Doom diag] reward widget scraped level={}", level);
+        if (level == null) {
+            // TEMPORARY diagnostic - the level pattern hasn't matched on any observed run yet;
+            // dump every non-empty text node in the widget tree so the real wording can be seen
+            // and DOOM_OF_MOKHAIOTL_LEVEL_PATTERN fixed. Remove once confirmed.
+            List<String> allText = new ArrayList<>();
+            collectDoomOfMokhaiotlWidgetText(root, allText);
+            log.info("[Doom diag] level scrape failed, widget text nodes={}", allText);
+        }
         if (level != null) {
             lastObservedDoomOfMokhaiotlDelveLevel = level;
+        }
+    }
+
+    private void collectDoomOfMokhaiotlWidgetText(Widget widget, List<String> out) {
+        if (widget == null) return;
+        String text = widget.getText();
+        if (text != null && !text.isEmpty()) {
+            out.add(Text.removeTags(text));
+        }
+        Widget[] dynamicChildren = widget.getDynamicChildren();
+        if (dynamicChildren != null) {
+            for (Widget child : dynamicChildren) collectDoomOfMokhaiotlWidgetText(child, out);
+        }
+        Widget[] staticChildren = widget.getStaticChildren();
+        if (staticChildren != null) {
+            for (Widget child : staticChildren) collectDoomOfMokhaiotlWidgetText(child, out);
         }
     }
 
