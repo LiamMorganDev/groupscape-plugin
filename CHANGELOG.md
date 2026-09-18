@@ -2,6 +2,14 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.42] - 2026-09-18
+
+### Fixed
+- A claimed Doom of Mokhaiotl run now shows the actual delve level reached, instead of always coming back blank - the reward screen never displayed the level at all, so the previous scrape could never have worked. Read from the same live game data used for death entries instead.
+
+### Changed
+- Internal: removed the Doom of Mokhaiotl diagnostic logging now that both issues are confirmed fixed.
+
 ## [1.8.41] - 2026-09-18
 
 ### Fixed

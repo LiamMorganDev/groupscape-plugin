@@ -707,11 +707,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
-        if (event.getGroupId() == DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP) {
-            captureDoomOfMokhaiotlDelveLevel();
-            return;
-        }
-
         if (event.getGroupId() != InterfaceID.CA_TASKS) return;
         if (doNotUseThisData()) return;
 
@@ -1938,24 +1933,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final long DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS = 5000L;
     private long lastDoomOfMokhaiotlKillMillis = 0;
 
-    /** Widget group for the "Burrow hole" reward screen (shown after every delve level's kill,
-     * whether the player then claims or descends further) - the only place the current delve
-     * level is ever displayed, since despawn detection is deliberately suppressed for this boss
-     * (see {@link #onNpcDespawned}). Not an official RuneLite constant; identified by inspecting
-     * the live widget tree. */
-    private static final int DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP = 919;
-    /** Matches this widget's level/depth text (exact wording unverified against a live client -
-     * kept permissive across "Level"/"Depth" phrasing so a wording tweak doesn't silently break
-     * capture). */
-    private static final Pattern DOOM_OF_MOKHAIOTL_LEVEL_PATTERN = Pattern.compile(
-            "(?i)(?:delve )?(?:level|depth)\\s*:?\\s*(\\d+)");
-    /** Level captured off the reward widget the last time it loaded - carried into whichever kill
-     * {@link #claimDoomOfMokhaiotlKill} next synthesizes, then cleared. {@code null} if the
-     * player has claimed rewards before the widget loaded, or the text didn't match
-     * {@link #DOOM_OF_MOKHAIOTL_LEVEL_PATTERN} - the kill still ships without a level rather than
-     * being dropped. */
-    private Integer lastObservedDoomOfMokhaiotlDelveLevel;
-
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) return;
@@ -2072,11 +2049,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     /**
      * Synthesizes the one Doom of Mokhaiotl kill for a delve run the moment its reward loot
-     * arrives (i.e. the player chose "Claim reward and exit" rather than descending further) -
-     * a no-op unless {@code npcName} is {@link #DOOM_OF_MOKHAIOTL_NPC_NAME}. Debounced against
+     * arrives (i.e. the player chose "Claim reward and exit" rather than descending further,
+     * confirmed live to fire as {@code LootRecordType.EVENT} - see {@link #onLootReceived}) - a
+     * no-op unless {@code npcName} is {@link #DOOM_OF_MOKHAIOTL_NPC_NAME}. Debounced against
      * {@link #DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS} for the same reason as
-     * {@link #claimHueycoatlKill}. Attaches whatever level {@link #captureDoomOfMokhaiotlDelveLevel}
-     * last observed, then clears it so a stale level can't leak into a future run.
+     * {@link #claimHueycoatlKill}.
      */
     private void claimDoomOfMokhaiotlKill(String npcName) {
         if (!DOOM_OF_MOKHAIOTL_NPC_NAME.equals(npcName)) return;
@@ -2088,89 +2065,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
         WorldPoint wp = local == null ? null : local.getWorldLocation();
         if (local == null || local.getName() == null || wp == null) return;
 
-        // TEMPORARY diagnostic - the reward widget scrape has come back null on every observed
-        // run so far; confirms the kill itself now ships (see onLootReceived) but the delve level
-        // is still going missing. Remove once the level pattern is fixed.
-        log.info("[Doom diag] shipping kill, lastObservedLevel={}", lastObservedDoomOfMokhaiotlDelveLevel);
+        // Same varp as onPlayerDeath's doomDelveLevel capture - confirmed live that the reward
+        // widget (group 919) never actually displays the level anywhere in its text, so the
+        // widget-scrape this used to do could never have worked. Reads 0 outside a delve run.
+        int doomLevel = client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP);
+        Integer delveLevel = doomLevel > 0 ? doomLevel : null;
         dataManager.getKillLootDeathEvents().onDoomOfMokhaiotlKill(
-                local.getName(), DOOM_OF_MOKHAIOTL_NPC_ID, npcName, lastObservedDoomOfMokhaiotlDelveLevel,
+                local.getName(), DOOM_OF_MOKHAIOTL_NPC_ID, npcName, delveLevel,
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
-        lastObservedDoomOfMokhaiotlDelveLevel = null;
-    }
-
-    /**
-     * Scans the Doom of Mokhaiotl reward widget's text for the current delve level, storing it in
-     * {@link #lastObservedDoomOfMokhaiotlDelveLevel} for {@link #claimDoomOfMokhaiotlKill} to pick
-     * up. This widget reloads at every level (whether the player then claims or descends further),
-     * so the stored value always reflects the most recent level by the time a claim happens.
-     */
-    private void captureDoomOfMokhaiotlDelveLevel() {
-        Widget root = client.getWidget(DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP, 0);
-        if (root == null) {
-            // TEMPORARY diagnostic, see onLootReceived - remove alongside it once confirmed.
-            log.info("[Doom diag] reward widget group {} loaded but child 0 is null", DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP);
-            return;
-        }
-        Integer level = findDoomOfMokhaiotlLevelInWidgetTree(root);
-        if (level == null) {
-            // TEMPORARY diagnostic - the level pattern hasn't matched on any observed run yet;
-            // dump every non-empty text node in the widget tree so the real wording can be seen
-            // and DOOM_OF_MOKHAIOTL_LEVEL_PATTERN fixed. Remove once confirmed.
-            List<String> allText = new ArrayList<>();
-            collectDoomOfMokhaiotlWidgetText(root, allText);
-            log.info("[Doom diag] level scrape failed, widget text nodes={}", allText);
-        }
-        if (level != null) {
-            lastObservedDoomOfMokhaiotlDelveLevel = level;
-        }
-    }
-
-    private void collectDoomOfMokhaiotlWidgetText(Widget widget, List<String> out) {
-        if (widget == null) return;
-        String text = widget.getText();
-        if (text != null && !text.isEmpty()) {
-            out.add(Text.removeTags(text));
-        }
-        Widget[] dynamicChildren = widget.getDynamicChildren();
-        if (dynamicChildren != null) {
-            for (Widget child : dynamicChildren) collectDoomOfMokhaiotlWidgetText(child, out);
-        }
-        Widget[] staticChildren = widget.getStaticChildren();
-        if (staticChildren != null) {
-            for (Widget child : staticChildren) collectDoomOfMokhaiotlWidgetText(child, out);
-        }
-    }
-
-    private Integer findDoomOfMokhaiotlLevelInWidgetTree(Widget widget) {
-        if (widget == null) return null;
-
-        String text = widget.getText();
-        if (text != null && !text.isEmpty()) {
-            Matcher m = DOOM_OF_MOKHAIOTL_LEVEL_PATTERN.matcher(Text.removeTags(text));
-            if (m.find()) {
-                try {
-                    return Integer.parseInt(m.group(1));
-                } catch (NumberFormatException ignored) {
-                    // Fall through and keep searching the rest of the tree.
-                }
-            }
-        }
-
-        Widget[] dynamicChildren = widget.getDynamicChildren();
-        if (dynamicChildren != null) {
-            for (Widget child : dynamicChildren) {
-                Integer found = findDoomOfMokhaiotlLevelInWidgetTree(child);
-                if (found != null) return found;
-            }
-        }
-        Widget[] staticChildren = widget.getStaticChildren();
-        if (staticChildren != null) {
-            for (Widget child : staticChildren) {
-                Integer found = findDoomOfMokhaiotlLevelInWidgetTree(child);
-                if (found != null) return found;
-            }
-        }
-        return null;
     }
 
     /**
