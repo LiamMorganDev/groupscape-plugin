@@ -2,6 +2,12 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.40] - 2026-09-18
+
+### Changed
+- Internal: the version shown in the client log ("GroupScape Tracker vX started!") is now generated from this changelog at build time instead of a hand-maintained file, so it can't silently drift out of sync again (it had been stuck reporting 1.8.5 for weeks).
+- Internal: added temporary diagnostic logging around Doom of Mokhaiotl's reward claim to track down a report of a completed delve not appearing in the loot log or activity feed.
+
 ## [1.8.39] - 2026-09-18
 
 ### Added

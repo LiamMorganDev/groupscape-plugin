@@ -1793,6 +1793,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Subscribe
     public void onLootReceived(LootReceived event) {
         boolean claimedByRaidCompletion = false;
+        // TEMPORARY: diagnosing a report that a claimed Doom of Mokhaiotl delve never showed up in
+        // the loot log/activity feed despite the fix in 962fb0c - logs every loot event even
+        // loosely matching the boss's name so we can see whether it's actually arriving as
+        // LootRecordType.NPC (what claimDoomOfMokhaiotlKill below expects) or something else, e.g.
+        // EVENT, since the reward is granted through an interface claim rather than a ground drop.
+        // Remove once confirmed.
+        if (event.getName() != null && event.getName().toLowerCase().contains("mokhaiotl")) {
+            log.info("[Doom diag] LootReceived type={} name='{}' items={}", event.getType(), event.getName(), event.getItems());
+        }
         if (event.getType() == LootRecordType.NPC) {
             List<Map<String, Object>> items = new ArrayList<>();
             for (ItemStack item : event.getItems()) {
@@ -2064,14 +2073,23 @@ public class GroupScapeTrackerPlugin extends Plugin {
      */
     private void claimDoomOfMokhaiotlKill(String npcName) {
         if (!DOOM_OF_MOKHAIOTL_NPC_NAME.equals(npcName)) return;
+        // TEMPORARY diagnostic, see onLootReceived - remove alongside it once confirmed.
+        log.info("[Doom diag] claimDoomOfMokhaiotlKill entered, lastObservedLevel={}", lastObservedDoomOfMokhaiotlDelveLevel);
         long now = System.currentTimeMillis();
-        if (now - lastDoomOfMokhaiotlKillMillis < DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS) return;
+        if (now - lastDoomOfMokhaiotlKillMillis < DOOM_OF_MOKHAIOTL_KILL_DEBOUNCE_MILLIS) {
+            log.info("[Doom diag] suppressed by debounce ({}ms since last)", now - lastDoomOfMokhaiotlKillMillis);
+            return;
+        }
         lastDoomOfMokhaiotlKillMillis = now;
 
         Player local = client.getLocalPlayer();
         WorldPoint wp = local == null ? null : local.getWorldLocation();
-        if (local == null || local.getName() == null || wp == null) return;
+        if (local == null || local.getName() == null || wp == null) {
+            log.info("[Doom diag] dropped, local player or worldpoint unavailable (local={}, wp={})", local, wp);
+            return;
+        }
 
+        log.info("[Doom diag] queuing synthesized kill at level {}", lastObservedDoomOfMokhaiotlDelveLevel);
         dataManager.getKillLootDeathEvents().onDoomOfMokhaiotlKill(
                 local.getName(), DOOM_OF_MOKHAIOTL_NPC_ID, npcName, lastObservedDoomOfMokhaiotlDelveLevel,
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
@@ -2086,8 +2104,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
      */
     private void captureDoomOfMokhaiotlDelveLevel() {
         Widget root = client.getWidget(DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP, 0);
-        if (root == null) return;
+        if (root == null) {
+            // TEMPORARY diagnostic, see onLootReceived - remove alongside it once confirmed.
+            log.info("[Doom diag] reward widget group {} loaded but child 0 is null", DOOM_OF_MOKHAIOTL_REWARD_WIDGET_GROUP);
+            return;
+        }
         Integer level = findDoomOfMokhaiotlLevelInWidgetTree(root);
+        log.info("[Doom diag] reward widget scraped level={}", level);
         if (level != null) {
             lastObservedDoomOfMokhaiotlDelveLevel = level;
         }

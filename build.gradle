@@ -30,6 +30,34 @@ dependencies {
 group = 'com.groupscape'
 version = '1.7.1'
 
+// The runtime "GroupScape Tracker vX started!" line (PluginVersion.get()) used to read a
+// hand-maintained version.properties that nobody remembered to bump alongside CHANGELOG.md - it
+// drifted for weeks (stuck reporting 1.8.5 while the changelog moved on to 1.8.39+), making the
+// log line useless for telling which fixes are actually running. Generating it straight from the
+// changelog's newest "## [x.y.z]" header removes the second, disconnected source of truth.
+def changelogVersion = providers.provider {
+	file('CHANGELOG.md').readLines()
+			.find { it.startsWith('## [') }
+			.with { (it =~ /## \[(.+?)\]/)[0][1] }
+}
+
+def versionPropertiesDir = layout.buildDirectory.dir('generated/resources/version')
+
+tasks.register('generateVersionProperties') {
+	def outDir = versionPropertiesDir
+	def ver = changelogVersion
+	inputs.file(file('CHANGELOG.md'))
+	outputs.dir(outDir)
+	doLast {
+		def dir = new File(outDir.get().asFile, 'com/groupscape')
+		dir.mkdirs()
+		new File(dir, 'version.properties').text = "version=${ver.get()}\n"
+	}
+}
+
+sourceSets.main.resources.srcDir(versionPropertiesDir)
+tasks.named('processResources') { dependsOn('generateVersionProperties') }
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
