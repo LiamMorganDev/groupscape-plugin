@@ -2067,9 +2067,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         // Same varp as onPlayerDeath's doomDelveLevel capture - confirmed live that the reward
         // widget (group 919) never actually displays the level anywhere in its text, so the
-        // widget-scrape this used to do could never have worked. Reads 0 outside a delve run.
+        // widget-scrape this used to do could never have worked. Zero-indexed (delve level 1
+        // reads 0), and this only ever runs in direct response to a Doom of Mokhaiotl claim, so
+        // there's no "outside a delve" case to guard against here - always +1, never null.
         int doomLevel = client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP);
-        Integer delveLevel = doomLevel > 0 ? doomLevel : null;
+        Integer delveLevel = doomLevel + 1;
         dataManager.getKillLootDeathEvents().onDoomOfMokhaiotlKill(
                 local.getName(), DOOM_OF_MOKHAIOTL_NPC_ID, npcName, delveLevel,
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
@@ -2176,9 +2178,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
         lastHitsplatAttackerName = null;
         // Live current-delve-level varp, not the post-kill reward widget scrape used for
         // claimDoomOfMokhaiotlKill - a death mid-fight never reaches that widget, so this is the
-        // only source for "what level were they on" here. Reads 0 outside a delve run.
-        int doomLevel = client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP);
-        Integer doomDelveLevel = doomLevel > 0 ? doomLevel : null;
+        // only source for "what level were they on" here. Zero-indexed (delve level 1 reads 0),
+        // same as the varp is - but unlike the claim path, onActorDeath fires for every death, not
+        // just Doom of Mokhaiotl ones, and the varp reads 0 both on delve level 1 and outside any
+        // delve at all. Only trust it when the killer really was Doom of Mokhaiotl; otherwise a
+        // death to any other monster while the varp happens to be at its 0 default would
+        // wrongly get labelled "delve level 1".
+        Integer doomDelveLevel = DOOM_OF_MOKHAIOTL_NPC_NAME.equals(killerName)
+                ? client.getVarpValue(VarPlayerID.DOM_CURRENT_LEVEL_TEMP) + 1
+                : null;
         pendingDeathCandidate = new PendingDeathCandidate(
                 local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName, doomDelveLevel);
         pendingDeathConfirmTicks = DEATH_CONFIRM_TICKS;

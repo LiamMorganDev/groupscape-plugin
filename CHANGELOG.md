@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.43] - 2026-09-18
+
+### Fixed
+- Doom of Mokhaiotl delve levels shown after a claimed run or a death were one lower than the level actually reached (e.g. finishing level 4 showed "level 3", and level 1 showed no level at all) - the game's own level counter starts at 0.
+
 ## [1.8.42] - 2026-09-18
 
 ### Fixed
